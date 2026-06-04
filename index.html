@@ -601,7 +601,119 @@ form{padding:20px 24px}
 .venc-cat{font-size:11px;color:var(--text3)}
 .venc-amount{font-size:13px;font-weight:700;color:var(--red);white-space:nowrap}
 
-@media(max-width:900px){.sidebar{display:none}.widgets-grid>*{grid-column:span 12}.venc-grid{grid-template-columns:1fr}.two-col,.three-col{grid-template-columns:1fr}}
+/* ── HAMBURGUER (mobile) ──────────────────────────── */
+.hamburger-btn{display:none;background:none;border:none;cursor:pointer;padding:6px;border-radius:8px;color:var(--text2);align-items:center;justify-content:center;transition:background .15s;margin-right:2px;flex-shrink:0}
+.hamburger-btn:hover{background:var(--bg)}
+.hamburger-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ── SIDEBAR OVERLAY (mobile) ─────────────────────── */
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99;backdrop-filter:blur(1px);animation:fadeIn .2s}
+.sidebar-overlay.show{display:block}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* ── TABLE SCROLL WRAPPER ─────────────────────────── */
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius)}
+
+/* ── TABLET (769–1024px) ──────────────────────────── */
+@media(max-width:1024px){
+  .patrimony-grid{grid-template-columns:repeat(3,1fr)}
+  .widget-w-4,.widget-w-5{grid-column:span 6}
+  .widget-w-7,.widget-w-8{grid-column:span 12}
+  .view{padding:20px 18px}
+  .modal.tx-wide{width:100%;max-width:660px}
+}
+
+/* ── MOBILE (≤768px) ──────────────────────────────── */
+@media(max-width:768px){
+  /* Sidebar: drawer slide-in */
+  .sidebar{position:fixed;left:-260px;top:0;height:100vh;z-index:100;
+    transition:left .25s cubic-bezier(.4,0,.2,1);box-shadow:none;width:260px}
+  .sidebar.open{left:0;box-shadow:var(--shadow-lg)}
+
+  /* Hamburguer visível */
+  .hamburger-btn{display:flex}
+
+  /* App */
+  #app{height:auto;min-height:100vh}
+  .main{width:100%;min-height:100vh}
+
+  /* Topbar */
+  .topbar{padding:10px 14px;gap:8px}
+  .topbar-left{gap:8px}
+  .page-title{font-size:14px;font-weight:700}
+  #current-month-label{min-width:60px;font-size:12px}
+
+  /* Botão Novo Lançamento: só ícone */
+  #btn-new-tx .tx-label{display:none}
+  #btn-new-tx{padding:8px 10px}
+  .user-name{display:none}
+
+  /* Views */
+  .view{padding:14px}
+
+  /* Patrimônio: 2 colunas */
+  .patrimony-grid{grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  .pat-card{padding:12px 10px;gap:10px}
+  .pat-value{font-size:15px}
+  .pat-label{font-size:10px}
+  .pat-icon-circle{width:34px;height:34px;border-radius:10px}
+  .pat-icon-circle svg{width:16px;height:16px}
+
+  /* Widgets: todos 12 col */
+  .widgets-grid>*{grid-column:span 12!important}
+  .widgets-grid{gap:12px}
+
+  /* Stats */
+  .stats-grid{grid-template-columns:1fr 1fr}
+
+  /* Grids de colunas */
+  .two-col,.three-col{grid-template-columns:1fr}
+  .venc-grid{grid-template-columns:1fr}
+
+  /* Modal: sheet estilo iOS (sobe de baixo) */
+  .modal-overlay{padding:0;align-items:flex-end}
+  .modal,.modal.wide,.modal.tx-wide{
+    border-radius:20px 20px 0 0;max-height:92vh;
+    width:100%!important;max-width:100%!important}
+  .modal-header{padding:14px 18px}
+  form{padding:14px 18px}
+  .modal-footer{padding:14px 18px;border-top:1px solid var(--border)}
+
+  /* Tabelas */
+  .data-table th,.data-table td{padding:10px 10px;font-size:12px}
+  .data-table .sort-th{padding-right:18px!important}
+
+  /* Saudação */
+  .greeting{font-size:18px}
+  .greeting-sub{font-size:12px}
+
+  /* Login */
+  .login-card{padding:28px 20px;width:100%;border-radius:14px}
+
+  /* Filtros */
+  .filter-bar{gap:6px}
+  .filter-bar input[type=text],.filter-search{min-width:100px}
+
+  /* Tipos de despesa / receita */
+  .tabs{width:100%;overflow-x:auto}
+
+  /* Alertas */
+  .alert-chips{gap:6px}
+  .alert-chip{padding:5px 10px;font-size:11.5px}
+
+  /* Item row faturas */
+  .item-row{grid-template-columns:1fr 60px;gap:6px}
+  .item-row>:nth-child(3),.item-row>:nth-child(4){display:none}
+}
+
+/* ── EXTRA PEQUENO (≤420px) ───────────────────────── */
+@media(max-width:420px){
+  .patrimony-grid{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:1fr}
+  .month-nav{display:none}
+  .topbar-left{gap:6px}
+  .pat-card.total{grid-column:1}
+}
 </style>
 </head>
 <body>
@@ -712,12 +824,16 @@ form{padding:20px 24px}
   </nav>
   <div class="sidebar-footer">Dados sincronizados na nuvem ☁️</div>
 </aside>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
 
 <!-- MAIN -->
 <div class="main">
   <!-- TOPBAR -->
   <div class="topbar">
     <div class="topbar-left">
+      <button class="hamburger-btn" id="btn-hamburger" title="Menu" aria-label="Abrir menu">
+        <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <span class="page-title" id="page-title">Página inicial</span>
       <div class="month-nav">
         <button id="prev-month" title="Mês anterior"><svg class="icon" style="width:14px;height:14px" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
@@ -728,7 +844,7 @@ form{padding:20px 24px}
     <div class="topbar-actions">
       <button type="button" class="btn primary" id="btn-new-tx" onclick="window.__fcOpenTx&&window.__fcOpenTx()">
         <svg class="icon" style="width:14px;height:14px;color:#fff;pointer-events:none" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        <span style="pointer-events:none">Novo Lançamento</span>
+        <span class="tx-label" style="pointer-events:none">Novo Lançamento</span>
       </button>
       <div class="dropdown-wrap">
         <button class="icon-btn" id="btn-notif" title="Notificações">
@@ -1766,7 +1882,7 @@ async function init(){
   // restore widgets order
   const so=localStorage.getItem('fc_widgets_order');
   if(so){try{widgetsOrder=JSON.parse(so);}catch(e){}}
-  setupNav();setupTopbar();setupModals();setupDropdowns();
+  setupNav();setupTopbar();setupModals();setupDropdowns();setupMobileMenu();
   updateMonthLabel();
   await refresh();
   await updateNotifications();
@@ -1824,6 +1940,23 @@ function setupTopbar(){
 }
 
 function setupDropdowns(){/* dropdowns abrem via hover (CSS .dropdown-wrap:hover) */}
+
+function setupMobileMenu(){
+  const btn=document.getElementById('btn-hamburger');
+  const sidebar=document.querySelector('.sidebar');
+  const overlay=document.getElementById('sidebar-overlay');
+  if(!btn||!sidebar||!overlay)return;
+  const open=()=>{sidebar.classList.add('open');overlay.classList.add('show');document.body.style.overflow='hidden';}
+  const close=()=>{sidebar.classList.remove('open');overlay.classList.remove('show');document.body.style.overflow='';}
+  btn.addEventListener('click',()=>sidebar.classList.contains('open')?close():open());
+  overlay.addEventListener('click',close);
+  // Fecha ao clicar em item do menu no mobile
+  document.querySelectorAll('.nav-item[data-view],.nav-item[onclick]').forEach(el=>{
+    el.addEventListener('click',()=>{if(window.innerWidth<=768)close();});
+  });
+  // Fecha ao girar para landscape
+  window.addEventListener('resize',()=>{if(window.innerWidth>768)close();});
+}
 
 function setupModals(){
   ['close-tx','close-cat','close-account','close-settings','close-profile','close-invoice','close-invoice-view','close-recibo','close-contrato','close-cc','close-cc-upload'].forEach(id=>{
