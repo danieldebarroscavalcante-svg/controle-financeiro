@@ -1452,24 +1452,29 @@ async function fbRestoreAll(){
 async function fbSyncOnLogin(){
   if(!isFirebaseReady())return;
   try{
-    const localTx=await _idbGetAll('transactions');
-    if(localTx.length>0){
-      // Tem dados locais → envia para a nuvem
-      await fbPushAll();
-      console.log('FC: dados locais enviados para Firebase');
-    } else {
-      // Local vazio → verifica se tem dados na nuvem
-      const snap=await _fbDb.ref(`users/${_fbUser.uid}/transactions`).get();
-      const fbCount=snap.exists()?Object.keys(snap.val()||{}).length:0;
-      if(fbCount>0){
-        const n=await fbRestoreAll();
-        if(n>0){
-          setTimeout(async()=>{
-            if(typeof refresh==='function')await refresh().catch(console.error);
-            alert(`☁️ ${n} registros restaurados da nuvem com sucesso!`);
-          },800);
-        }
+    // Conta registros locais em TODOS os stores (não só transações)
+    let localCount=0;
+    for(const s of FB_STORES){localCount+=(await _idbGetAll(s)).length;}
+    // Conta registros na nuvem em todos os stores
+    const snap=await _fbDb.ref(`users/${_fbUser.uid}`).get();
+    let cloudCount=0;
+    if(snap.exists()){
+      const data=snap.val()||{};
+      for(const s of FB_STORES){if(data[s])cloudCount+=Object.keys(data[s]).length;}
+    }
+    if(cloudCount>localCount){
+      // Nuvem tem mais dados (ex: novo dispositivo) → restaura
+      const n=await fbRestoreAll();
+      if(n>0){
+        setTimeout(async()=>{
+          if(typeof refresh==='function')await refresh().catch(console.error);
+          alert(`☁️ ${n} registros restaurados da nuvem com sucesso!`);
+        },800);
       }
+    } else if(localCount>0){
+      // Local tem dados (>= nuvem) → garante que tudo está na nuvem
+      const n=await fbPushAll();
+      console.log('FC: '+n+' registros locais enviados para Firebase');
     }
   }catch(e){console.error('FB sync on login:',e);}
 }
