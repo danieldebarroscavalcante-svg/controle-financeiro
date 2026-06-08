@@ -1892,6 +1892,26 @@ const EMOJI_TO_KEY={'💼':'briefcase','💻':'laptop','💰':'dollar','📈':'t
 function catIcon(key){if(CAT_ICONS[key])return CAT_ICONS[key];if(EMOJI_TO_KEY[key])return CAT_ICONS[EMOJI_TO_KEY[key]];return CAT_ICONS.box;}
 async function migrateCatIcons(){const cats=await dbGetAll('categories');for(const cat of cats){if(EMOJI_TO_KEY[cat.icon]){cat.icon=EMOJI_TO_KEY[cat.icon];await dbPut('categories',cat);}else if(!CAT_ICONS[cat.icon]){cat.icon='box';await dbPut('categories',cat);}}}
 
+// Remove categorias duplicadas (mesmo nome+tipo). Mantém uma e reaponta as transações.
+// Determinístico (mantém o menor id) para que múltiplos dispositivos convirjam igual.
+async function dedupeCategories(){
+  const cats=await dbGetAll('categories');
+  cats.sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+  const keep={},remap={},dupIds=[];
+  for(const c of cats){
+    const key=(c.name||'').trim().toLowerCase()+'|'+(c.type||'');
+    if(keep[key]!==undefined){remap[c.id]=keep[key];dupIds.push(c.id);}
+    else keep[key]=c.id;
+  }
+  if(!dupIds.length)return 0;
+  // Reaponta as transações das duplicadas para a categoria mantida
+  const txs=await dbGetAll('transactions');
+  for(const t of txs){if(t.categoryId&&remap[t.categoryId]!==undefined){t.categoryId=remap[t.categoryId];await dbPut('transactions',t);}}
+  // Remove as duplicadas (dbDelete também propaga para o Firebase quando conectado)
+  for(const id of dupIds)await dbDelete('categories',id);
+  return dupIds.length;
+}
+
 // ══ SEED ══════════════════════════════════════════════════════════════
 async function seed(){const ex=await dbGetAll('categories');if(ex.length)return;const defs=[
   {id:uid(),name:'Salário',type:'income',color:'#10B981',icon:'briefcase'},
