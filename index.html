@@ -1871,8 +1871,56 @@ async function seed(){const ex=await dbGetAll('categories');if(ex.length)return;
 ];for(const c of defs)await dbPut('categories',c);}
 
 // ══ RECURRENCE ════════════════════════════════════════════════════════
-async function genRecurring(){const recs=await dbGetAll('recurrences');const today=new Date();today.setHours(0,0,0,0);for(const rec of recs){if(!rec.active)continue;if(rec.endDate&&today>new Date(rec.endDate))continue;const existing=await dbGetAll('transactions','recurrenceId',rec.id);const exDates=new Set(existing.map(t=>t.date));const dates=getOccs(rec,today);for(const date of dates){if(!exDates.has(date)){await dbPut('transactions',{...rec.template,id:uid(),date,recurrenceId:rec.id,status:'pending',attachments:[]});}}}}
-function getOccs(rec,upTo){const r=[];let cur=new Date(rec.startDate);cur.setHours(0,0,0,0);const lim=new Date(upTo);lim.setDate(lim.getDate()+90);const setDay=()=>{if(rec.dayOfMonth){const max=new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate();cur.setDate(Math.min(rec.dayOfMonth,max));}};let safety=0;while(cur<=lim&&safety++<3000){r.push(cur.toISOString().split('T')[0]);const f=rec.frequency;if(f==='daily')cur.setDate(cur.getDate()+1);else if(f==='weekly')cur.setDate(cur.getDate()+7);else if(f==='biweekly')cur.setDate(cur.getDate()+14);else if(f==='monthly'){cur.setMonth(cur.getMonth()+1);setDay();}else if(f==='bimonthly'){cur.setMonth(cur.getMonth()+2);setDay();}else if(f==='quarterly'){cur.setMonth(cur.getMonth()+3);setDay();}else if(f==='yearly'){cur.setFullYear(cur.getFullYear()+1);setDay();}else if(f==='custom')cur.setDate(cur.getDate()+(rec.interval||30));else break;}return r;}
+async function genRecurring(){
+  const recs=await dbGetAll('recurrences');
+  const today=new Date();today.setHours(0,0,0,0);
+  // Gera ocorrências até o fim do mês visualizado (ou hoje, o que for maior),
+  // assim ao navegar para meses futuros as recorrências continuam aparecendo.
+  const viewedEnd=(typeof curYear!=='undefined'&&typeof curMonth!=='undefined')?new Date(curYear,curMonth,0):today;
+  const base=viewedEnd>today?viewedEnd:today;
+  for(const rec of recs){
+    if(!rec.active)continue;
+    if(rec.endDate){const[ey,em,ed]=rec.endDate.split('-').map(Number);if(today>new Date(ey,em-1,ed))continue;}
+    const existing=await dbGetAll('transactions','recurrenceId',rec.id);
+    const exDates=new Set(existing.map(t=>t.date));
+    const dates=getOccs(rec,base);
+    for(const date of dates){
+      if(!exDates.has(date)){
+        await dbPut('transactions',{...rec.template,id:uid(),date,recurrenceId:rec.id,status:'pending',attachments:[]});
+      }
+    }
+  }
+}
+function getOccs(rec,upTo){
+  const r=[];
+  // Parse YYYY-MM-DD como data LOCAL (evita shift de fuso que jogava o dia para o mês anterior)
+  const [sy,sm,sd]=rec.startDate.split('-').map(Number);
+  let cur=new Date(sy,sm-1,sd);
+  // Horizonte de geração por frequência (em dias) — garante meses subsequentes
+  const HORIZON={daily:90,weekly:180,biweekly:365,monthly:400,bimonthly:760,quarterly:1100,yearly:1900,custom:365};
+  let lim=new Date(upTo);
+  lim.setDate(lim.getDate()+(HORIZON[rec.frequency]||400));
+  // Respeita a data-fim da recorrência, se houver
+  if(rec.endDate){const[ey,em,ed]=rec.endDate.split('-').map(Number);const end=new Date(ey,em-1,ed);if(end<lim)lim=end;}
+  const fmt=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  // Avança N meses preservando o dia desejado, com clamp para meses curtos (ex: dia 31 → 28/30)
+  const addMonths=(d,n)=>{const m=d.getMonth()+n;const ty=d.getFullYear()+Math.floor(m/12);const tm=((m%12)+12)%12;const maxD=new Date(ty,tm+1,0).getDate();const day=Math.min(rec.dayOfMonth||sd,maxD);return new Date(ty,tm,day);};
+  let safety=0;
+  while(cur<=lim&&safety++<3000){
+    r.push(fmt(cur));
+    const f=rec.frequency;
+    if(f==='daily')cur=new Date(cur.getFullYear(),cur.getMonth(),cur.getDate()+1);
+    else if(f==='weekly')cur=new Date(cur.getFullYear(),cur.getMonth(),cur.getDate()+7);
+    else if(f==='biweekly')cur=new Date(cur.getFullYear(),cur.getMonth(),cur.getDate()+14);
+    else if(f==='monthly')cur=addMonths(cur,1);
+    else if(f==='bimonthly')cur=addMonths(cur,2);
+    else if(f==='quarterly')cur=addMonths(cur,3);
+    else if(f==='yearly')cur=addMonths(cur,12);
+    else if(f==='custom')cur=new Date(cur.getFullYear(),cur.getMonth(),cur.getDate()+(rec.interval||30));
+    else break;
+  }
+  return r;
+}
 
 // ══ STATE ═════════════════════════════════════════════════════════════
 let curYear=new Date().getFullYear(),curMonth=new Date().getMonth()+1;
@@ -1919,7 +1967,7 @@ function navigate(view){
 
 function setupTopbar(){
   document.getElementById('prev-month').addEventListener('click',()=>{curMonth--;if(curMonth<1){curMonth=12;curYear--;}updateMonthLabel();refresh();});
-  document.getElementById('next-month').addEventListener('click',()=>{curMonth++;if(curMonth>12){curMonth=1;curYear++;}updateMonthLabel();refresh();});
+  document.getElementById('next-month').addEventListener('click',async()=>{curMonth++;if(curMonth>12){curMonth=1;curYear++;}updateMonthLabel();await genRecurring().catch(console.error);refresh();});
   if(window._appBodyClick)document.body.removeEventListener('click',window._appBodyClick);
   window._appBodyClick=function(e){
     try{
