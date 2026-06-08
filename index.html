@@ -1517,6 +1517,9 @@ async function fbSyncOnLogin(){
       const n=await fbPushAll();
       console.log('FC: '+n+' registros locais enviados para Firebase');
     }
+    // Remove categorias duplicadas que possam ter surgido do sync (limpa local + nuvem)
+    const _dups=await dedupeCategories();
+    if(_dups>0){console.log('FC: '+_dups+' categorias duplicadas removidas');if(typeof refresh==='function')await refresh().catch(console.error);}
   }catch(e){console.error('FB sync on login:',e);}
 }
 
@@ -1992,7 +1995,7 @@ let widgetsOrder=['previsto','contaprincipal','fluxo','comparativo','top5'];
 
 // ══ INIT ══════════════════════════════════════════════════════════════
 async function init(){
-  await openDB();await seed();await seedAccounts();await migrateCatIcons();await genRecurring();
+  await openDB();await seed();await seedAccounts();await migrateCatIcons();await dedupeCategories();await genRecurring();
   // restore widgets order
   const so=localStorage.getItem('fc_widgets_order');
   if(so){try{widgetsOrder=JSON.parse(so);}catch(e){}}
