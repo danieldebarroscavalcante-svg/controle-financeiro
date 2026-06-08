@@ -1976,7 +1976,7 @@ async function init(){
   // restore widgets order
   const so=localStorage.getItem('fc_widgets_order');
   if(so){try{widgetsOrder=JSON.parse(so);}catch(e){}}
-  setupNav();setupTopbar();setupModals();setupDropdowns();setupMobileMenu();
+  setupNav();setupTopbar();setupModals();setupDropdowns();setupMobileMenu();setupTxTables();
   updateMonthLabel();
   await refresh();
   await updateNotifications();
@@ -2482,6 +2482,98 @@ function payToggle(id,paid){
   </div>`;
 }
 
+// ══ SELEÇÃO EM MASSA + EDIÇÃO INLINE (Receber/Pagar) ══════════════════
+function _bodyOf(view){return document.getElementById(view==='receber'?'receber-body':'pagar-body');}
+function getSelectedIds(view){const b=_bodyOf(view);return b?Array.from(b.querySelectorAll('.row-chk:checked')).map(c=>c.dataset.id):[];}
+function syncBulkBar(view){
+  const ids=getSelectedIds(view);
+  const bar=document.getElementById(view+'-bulk');
+  const count=document.getElementById(view+'-bulk-count');
+  if(bar)bar.classList.toggle('show',ids.length>0);
+  if(count)count.textContent=ids.length+' selecionado'+(ids.length===1?'':'s');
+  const all=document.querySelector(`.chk-all[data-chkall="${view}"]`);
+  const b=_bodyOf(view);
+  if(all&&b){const total=b.querySelectorAll('.row-chk').length;all.checked=total>0&&ids.length===total;all.indeterminate=ids.length>0&&ids.length<total;}
+}
+function setupTxTables(){
+  ['receber','pagar'].forEach(view=>{
+    const body=_bodyOf(view);
+    if(body&&!body._txBound){
+      body._txBound=true;
+      // Edição inline ao clicar numa célula editável
+      body.addEventListener('click',e=>{
+        if(e.target.closest('input,select,button,.pay-toggle'))return;
+        const td=e.target.closest('td.ed');
+        if(td&&!td.classList.contains('editing'))startInlineEdit(td);
+      });
+      // Marcação de checkbox
+      body.addEventListener('change',e=>{
+        if(e.target.classList.contains('row-chk')){
+          const tr=e.target.closest('tr');if(tr)tr.classList.toggle('row-selected',e.target.checked);
+          syncBulkBar(view);
+        }
+      });
+    }
+    const all=document.querySelector(`.chk-all[data-chkall="${view}"]`);
+    if(all&&!all._bound){
+      all._bound=true;
+      all.addEventListener('change',()=>{
+        const b=_bodyOf(view);if(!b)return;
+        b.querySelectorAll('.row-chk').forEach(chk=>{chk.checked=all.checked;const tr=chk.closest('tr');if(tr)tr.classList.toggle('row-selected',all.checked);});
+        syncBulkBar(view);
+      });
+    }
+  });
+}
+async function getInlineOptions(field,id){
+  if(field==='categoryId'){
+    const tx=await dbGet('transactions',id);
+    const cats=(await dbGetAll('categories')).filter(c=>c.type===(tx?tx.type:'expense'));
+    const o={'':'— Sem categoria —'};cats.forEach(c=>o[c.id]=c.name);return o;
+  }
+  if(field==='tipoRecebimento')return{'':'—',...getTiposRecebimento()};
+  if(field==='tipoPagamento')return{'':'—',...getTiposPagamento()};
+  if(field==='paymentMethod')return{'':'—',...getPayModes()};
+  if(field==='tipoDespesa')return{'':'—',fixa:'Fixa',variavel:'Variável'};
+  return{};
+}
+async function startInlineEdit(td){
+  const field=td.dataset.f,id=td.dataset.id,type=td.dataset.t,raw=td.dataset.v||'';
+  const original=td.innerHTML;
+  let committed=false;
+  td.classList.add('editing');
+  const restore=()=>{td.innerHTML=original;td.classList.remove('editing');};
+  const commit=async(val)=>{
+    if(committed)return;committed=true;
+    const tx=await dbGet('transactions',id);
+    if(!tx){restore();return;}
+    tx[field]=(type==='currency')?parseCurrency(val):val;
+    await dbPut('transactions',tx);
+    await refresh();
+  };
+  let editor;
+  if(type==='select'){
+    editor=document.createElement('select');editor.className='inline-editor';
+    const opts=await getInlineOptions(field,id);
+    editor.innerHTML=Object.entries(opts).map(([k,v])=>`<option value="${esc(k)}"${k===raw?' selected':''}>${esc(v)}</option>`).join('');
+    td.innerHTML='';td.appendChild(editor);editor.focus();
+    editor.addEventListener('change',()=>commit(editor.value));
+    editor.addEventListener('blur',()=>{if(!committed)restore();});
+  }else{
+    editor=document.createElement('input');editor.className='inline-editor';
+    editor.type=(type==='date')?'date':'text';editor.value=raw;
+    if(type==='currency')attachCurrencyMask(editor);
+    td.innerHTML='';td.appendChild(editor);editor.focus();
+    if(type==='text'){try{editor.setSelectionRange(editor.value.length,editor.value.length);}catch(e){}}
+    if(type==='date')editor.addEventListener('change',()=>commit(editor.value));
+    editor.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){e.preventDefault();commit(editor.value);}
+      else if(e.key==='Escape'){e.preventDefault();committed=true;restore();}
+    });
+    editor.addEventListener('blur',()=>commit(editor.value));
+  }
+}
+
 // ══ PAGAR ═════════════════════════════════════════════════════════════
 let _pColFiltersBound=false;
 function bindPagarColFilters(){if(_pColFiltersBound)return;_pColFiltersBound=true;document.querySelectorAll('[data-pcol]').forEach(el=>el.addEventListener('input',()=>renderPagar()));document.querySelectorAll('select[data-pcol]').forEach(el=>el.addEventListener('change',()=>renderPagar()));}
@@ -2531,22 +2623,23 @@ async function renderPagar(){
   document.getElementById('p-overdue').textContent=fmt(overdue);
   document.getElementById('p-total').textContent=fmt(total);
   const body=document.getElementById('pagar-body');
-  if(!txs.length){body.innerHTML='<tr><td colspan="10" class="empty-row">Nenhuma despesa encontrada.</td></tr>';return;}
+  if(!txs.length){body.innerHTML='<tr><td colspan="11" class="empty-row">Nenhuma despesa encontrada.</td></tr>';return;}
   body.innerHTML=txs.map(t=>{
     const cat=catMap[t.categoryId];
     const color=cat?cat.color:'#94A3B8';
     const isPaid=t.status==='paid';
     const isOver=t.status==='pending'&&t.date<today;
     const tipoCls=t.tipoDespesa==='fixa'?'badge-fixa':'badge-variavel';
-    return`<tr>
-      <td>${fmtDate(t.date)}</td>
-      <td><strong>${esc(t.description)}</strong></td>
-      <td class="cell-amount neg">${fmt(t.amount)}</td>
-      <td>${esc(t.pagoA||'—')}</td>
-      <td><span class="cell-cat" style="background:${color}15;color:${color}">${catIcon(cat?.icon)} ${cat?esc(cat.name):'—'}</span></td>
-      <td>${t.tipoDespesa?`<span class="badge ${tipoCls}">${t.tipoDespesa==='fixa'?'Fixa':'Variável'}</span>`:'—'}</td>
-      <td>${getTiposPagamento()[t.tipoPagamento]||'—'}</td>
-      <td>${getPayModes()[t.paymentMethod]||'—'}</td>
+    return`<tr data-row-id="${t.id}">
+      <td class="chk-cell"><input type="checkbox" class="row-chk" data-id="${t.id}"></td>
+      <td class="ed" data-f="date" data-id="${t.id}" data-t="date" data-v="${t.date}">${fmtDate(t.date)}</td>
+      <td class="ed" data-f="description" data-id="${t.id}" data-t="text" data-v="${esc(t.description)}"><strong>${esc(t.description)}</strong></td>
+      <td class="ed cell-amount neg" data-f="amount" data-id="${t.id}" data-t="currency" data-v="${maskFromNumber(t.amount)}">${fmt(t.amount)}</td>
+      <td class="ed" data-f="pagoA" data-id="${t.id}" data-t="text" data-v="${esc(t.pagoA||'')}">${esc(t.pagoA||'—')}</td>
+      <td class="ed" data-f="categoryId" data-id="${t.id}" data-t="select" data-v="${t.categoryId||''}"><span class="cell-cat" style="background:${color}15;color:${color}">${catIcon(cat?.icon)} ${cat?esc(cat.name):'—'}</span></td>
+      <td class="ed" data-f="tipoDespesa" data-id="${t.id}" data-t="select" data-v="${t.tipoDespesa||''}">${t.tipoDespesa?`<span class="badge ${tipoCls}">${t.tipoDespesa==='fixa'?'Fixa':'Variável'}</span>`:'—'}</td>
+      <td class="ed" data-f="tipoPagamento" data-id="${t.id}" data-t="select" data-v="${t.tipoPagamento||''}">${getTiposPagamento()[t.tipoPagamento]||'—'}</td>
+      <td class="ed" data-f="paymentMethod" data-id="${t.id}" data-t="select" data-v="${t.paymentMethod||''}">${getPayModes()[t.paymentMethod]||'—'}</td>
       <td>${payToggle(t.id,isPaid)}</td>
       <td class="cell-actions">
         <button class="btn-icon" onclick="FC.editTx('${t.id}')">${I.edit}</button>
@@ -2554,6 +2647,7 @@ async function renderPagar(){
       </td>
     </tr>`;
   }).join('');
+  syncBulkBar('pagar');
 }
 
 // ══ VENCIMENTOS ═══════════════════════════════════════════════════════
@@ -3853,6 +3947,16 @@ window.FC={
     tx.status=paid?'paid':'pending';
     await dbPut('transactions',tx);
     await refresh();
+  },
+  bulkDelete:async view=>{
+    const ids=getSelectedIds(view);if(!ids.length)return;
+    if(!confirm(`Excluir ${ids.length} lançamento(s) selecionado(s)?\n\nEsta ação não pode ser desfeita.`))return;
+    for(const id of ids)await dbDelete('transactions',id);
+    await refresh();
+  },
+  bulkClear:view=>{
+    const b=_bodyOf(view);if(b)b.querySelectorAll('.row-chk:checked').forEach(c=>{c.checked=false;const tr=c.closest('tr');if(tr)tr.classList.remove('row-selected');});
+    syncBulkBar(view);
   },
   editCat:id=>openCatModal(id),
   delCat:async id=>{
