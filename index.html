@@ -385,6 +385,30 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .sort-th.sort-desc .arrows{opacity:1}
 .sort-th.sort-desc .arrows .up{opacity:.25}
 
+/* ── CHECKBOX SELEÇÃO + EDIÇÃO INLINE ────────────── */
+.chk-cell{width:38px;text-align:center;padding-left:10px!important;padding-right:6px!important}
+.row-chk,.chk-all{width:16px;height:16px;accent-color:var(--primary);cursor:pointer;margin:0;vertical-align:middle}
+.data-table tbody tr.row-selected td{background:var(--primary-xl)!important}
+.bulk-bar{display:none;align-items:center;gap:14px;background:var(--primary);color:#fff;border-radius:10px;padding:10px 16px;margin-bottom:14px;box-shadow:var(--shadow-md);animation:fadeIn .15s}
+.bulk-bar.show{display:flex}
+.bulk-bar .bulk-count{font-size:13.5px;font-weight:700}
+.bulk-bar .bulk-spacer{flex:1}
+.bulk-bar button{border:none;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+.bulk-bar .bulk-del{background:#fff;color:var(--red)}
+.bulk-bar .bulk-del:hover{background:var(--red-l)}
+.bulk-bar .bulk-clear{background:rgba(255,255,255,.18);color:#fff}
+.bulk-bar .bulk-clear:hover{background:rgba(255,255,255,.3)}
+.bulk-bar svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* célula editável inline */
+td.ed{cursor:text;position:relative;transition:box-shadow .12s}
+td.ed[data-t="select"],td.ed[data-t="date"]{cursor:pointer}
+td.ed:hover{box-shadow:inset 0 0 0 1.5px var(--primary-l)}
+td.ed:hover::after{content:'';position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;background:var(--primary);opacity:.5}
+td.ed.editing{box-shadow:inset 0 0 0 2px var(--primary)}
+td.ed .inline-editor{width:100%;border:none;background:#fff;font-size:13px;font-family:inherit;color:var(--text);outline:none;padding:4px 6px;border-radius:5px;box-shadow:0 0 0 1.5px var(--primary)}
+td.ed .inline-editor:focus{box-shadow:0 0 0 2px var(--primary)}
+td.ed select.inline-editor{cursor:pointer}
+
 /* ── CARTÃO DE CRÉDITO ───────────────────────────── */
 .cc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px}
 .cc-card{background:linear-gradient(135deg,var(--card-grad-from,#1e293b) 0%,var(--card-grad-to,#0f172a) 100%);color:#fff;border-radius:14px;padding:20px;position:relative;overflow:hidden;min-height:170px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:var(--shadow-md);cursor:pointer;transition:transform .15s,box-shadow .15s}
@@ -940,10 +964,17 @@ form{padding:20px 24px}
       </div>
       <select id="r-status"><option value="">Todos os status</option><option value="paid">Recebido</option><option value="pending">Pendente</option><option value="overdue">Vencido</option></select>
     </div>
+    <div class="bulk-bar" id="receber-bulk">
+      <span class="bulk-count" id="receber-bulk-count">0 selecionados</span>
+      <div class="bulk-spacer"></div>
+      <button class="bulk-clear" onclick="FC.bulkClear('receber')">Limpar seleção</button>
+      <button class="bulk-del" onclick="FC.bulkDelete('receber')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Excluir selecionados</button>
+    </div>
     <div style="overflow-x:auto">
       <table class="data-table">
         <thead>
           <tr id="receber-sort-row">
+            <th class="chk-cell"><input type="checkbox" class="chk-all" data-chkall="receber" title="Selecionar todos"></th>
             <th class="sort-th" data-rsort="date">Data<span class="arrows"><span class="up">▲</span><span class="down">▼</span></span></th>
             <th class="sort-th" data-rsort="description">Descrição<span class="arrows"><span class="up">▲</span><span class="down">▼</span></span></th>
             <th class="sort-th" data-rsort="amount">Valor<span class="arrows"><span class="up">▲</span><span class="down">▼</span></span></th>
@@ -955,6 +986,7 @@ form{padding:20px 24px}
             <th>Ações</th>
           </tr>
           <tr class="col-filters">
+            <th class="chk-cell"></th>
             <th><input type="text" data-rcol="date" placeholder="🔍"></th>
             <th><input type="text" data-rcol="description" placeholder="🔍"></th>
             <th><input type="text" data-rcol="amount" placeholder="🔍"></th>
@@ -999,10 +1031,17 @@ form{padding:20px 24px}
       <select id="p-tipo-despesa"><option value="">Todas as despesas</option><option value="fixa">Fixa</option><option value="variavel">Variável</option></select>
       <select id="p-status"><option value="">Todos os status</option><option value="paid">Pago</option><option value="pending">Pendente</option><option value="overdue">Vencido</option></select>
     </div>
+    <div class="bulk-bar" id="pagar-bulk">
+      <span class="bulk-count" id="pagar-bulk-count">0 selecionados</span>
+      <div class="bulk-spacer"></div>
+      <button class="bulk-clear" onclick="FC.bulkClear('pagar')">Limpar seleção</button>
+      <button class="bulk-del" onclick="FC.bulkDelete('pagar')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Excluir selecionados</button>
+    </div>
     <div style="overflow-x:auto">
       <table class="data-table">
         <thead>
           <tr id="pagar-sort-row">
+            <th class="chk-cell"><input type="checkbox" class="chk-all" data-chkall="pagar" title="Selecionar todos"></th>
             <th class="sort-th" data-psort="date">Data<span class="arrows"><span class="up">▲</span><span class="down">▼</span></span></th>
             <th class="sort-th" data-psort="description">Descrição<span class="arrows"><span class="up">▲</span><span class="down">▼</span></span></th>
             <th class="sort-th" data-psort="amount">Valor<span class="arrows"><span class="up">▲</span><span class="down">▼</span></span></th>
@@ -1015,6 +1054,7 @@ form{padding:20px 24px}
             <th>Ações</th>
           </tr>
           <tr class="col-filters">
+            <th class="chk-cell"></th>
             <th><input type="text" data-pcol="date" placeholder="🔍"></th>
             <th><input type="text" data-pcol="description" placeholder="🔍"></th>
             <th><input type="text" data-pcol="amount" placeholder="🔍"></th>
@@ -2411,19 +2451,20 @@ async function renderReceber(){
   document.getElementById('r-pending').textContent=fmt(pending);
   document.getElementById('r-total').textContent=fmt(total);
   const body=document.getElementById('receber-body');
-  if(!txs.length){body.innerHTML='<tr><td colspan="9" class="empty-row">Nenhum recebimento encontrado.</td></tr>';return;}
+  if(!txs.length){body.innerHTML='<tr><td colspan="10" class="empty-row">Nenhum recebimento encontrado.</td></tr>';return;}
   body.innerHTML=txs.map(t=>{
     const cat=catMap[t.categoryId];
     const color=cat?cat.color:'#94A3B8';
     const paid=t.status==='paid';
-    return`<tr>
-      <td>${fmtDate(t.date)}</td>
-      <td><strong>${esc(t.description)}</strong></td>
-      <td class="cell-amount pos">${fmt(t.amount)}</td>
-      <td>${esc(t.recebidoDe||'—')}</td>
-      <td><span class="cell-cat" style="background:${color}15;color:${color}">${catIcon(cat?.icon)} ${cat?esc(cat.name):'—'}</span></td>
-      <td>${getTiposRecebimento()[t.tipoRecebimento]||'—'}</td>
-      <td>${getPayModes()[t.paymentMethod]||'—'}</td>
+    return`<tr data-row-id="${t.id}">
+      <td class="chk-cell"><input type="checkbox" class="row-chk" data-id="${t.id}"></td>
+      <td class="ed" data-f="date" data-id="${t.id}" data-t="date" data-v="${t.date}">${fmtDate(t.date)}</td>
+      <td class="ed" data-f="description" data-id="${t.id}" data-t="text" data-v="${esc(t.description)}"><strong>${esc(t.description)}</strong></td>
+      <td class="ed cell-amount pos" data-f="amount" data-id="${t.id}" data-t="currency" data-v="${maskFromNumber(t.amount)}">${fmt(t.amount)}</td>
+      <td class="ed" data-f="recebidoDe" data-id="${t.id}" data-t="text" data-v="${esc(t.recebidoDe||'')}">${esc(t.recebidoDe||'—')}</td>
+      <td class="ed" data-f="categoryId" data-id="${t.id}" data-t="select" data-v="${t.categoryId||''}"><span class="cell-cat" style="background:${color}15;color:${color}">${catIcon(cat?.icon)} ${cat?esc(cat.name):'—'}</span></td>
+      <td class="ed" data-f="tipoRecebimento" data-id="${t.id}" data-t="select" data-v="${t.tipoRecebimento||''}">${getTiposRecebimento()[t.tipoRecebimento]||'—'}</td>
+      <td class="ed" data-f="paymentMethod" data-id="${t.id}" data-t="select" data-v="${t.paymentMethod||''}">${getPayModes()[t.paymentMethod]||'—'}</td>
       <td>${payToggle(t.id,paid)}</td>
       <td class="cell-actions">
         <button class="btn-icon" onclick="FC.editTx('${t.id}')">${I.edit}</button>
@@ -2431,6 +2472,7 @@ async function renderReceber(){
       </td>
     </tr>`;
   }).join('');
+  syncBulkBar('receber');
 }
 
 function payToggle(id,paid){
