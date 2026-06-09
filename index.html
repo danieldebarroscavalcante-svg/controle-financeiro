@@ -1951,15 +1951,37 @@ async function genRecurring(){
   // assim ao navegar para meses futuros as recorrências continuam aparecendo.
   const viewedEnd=(typeof curYear!=='undefined'&&typeof curMonth!=='undefined')?new Date(curYear,curMonth,0):today;
   const base=viewedEnd>today?viewedEnd:today;
+  const fmtD=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  // Calcula dueDate proporcional: mantém o mesmo offset em dias em relação à date de cada ocorrência
+  const calcDueDate=(tplDate,tplDue,occDate)=>{
+    if(!tplDue||!tplDate)return tplDue||'';
+    const [ty,tm,td]=tplDate.split('-').map(Number);
+    const [dy,dm,dd]=tplDue.split('-').map(Number);
+    const offsetDays=Math.round((new Date(dy,dm-1,dd)-new Date(ty,tm-1,td))/86400000);
+    if(offsetDays<=0)return tplDue;
+    const [oy,om,od]=occDate.split('-').map(Number);
+    const d=new Date(oy,om-1,od);d.setDate(d.getDate()+offsetDays);
+    return fmtD(d);
+  };
   for(const rec of recs){
     if(!rec.active)continue;
     if(rec.endDate){const[ey,em,ed]=rec.endDate.split('-').map(Number);if(today>new Date(ey,em-1,ed))continue;}
     const existing=await dbGetAll('transactions','recurrenceId',rec.id);
     const exDates=new Set(existing.map(t=>t.date));
+    // Corrige dueDate das ocorrências pendentes que ainda estão com o valor original do template
+    if(rec.template.dueDate&&rec.template.date){
+      for(const t of existing){
+        if(t.status!=='paid'&&t.dueDate===rec.template.dueDate&&t.date!==rec.template.date){
+          const corrected=calcDueDate(rec.template.date,rec.template.dueDate,t.date);
+          if(corrected&&corrected!==t.dueDate)await dbPut('transactions',{...t,dueDate:corrected});
+        }
+      }
+    }
     const dates=getOccs(rec,base);
     for(const date of dates){
       if(!exDates.has(date)){
-        await dbPut('transactions',{...rec.template,id:uid(),date,recurrenceId:rec.id,status:'pending',attachments:[]});
+        const dueDate=calcDueDate(rec.template.date,rec.template.dueDate,date);
+        await dbPut('transactions',{...rec.template,id:uid(),date,dueDate,recurrenceId:rec.id,status:'pending',attachments:[]});
       }
     }
   }
