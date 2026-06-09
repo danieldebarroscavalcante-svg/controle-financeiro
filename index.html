@@ -1952,13 +1952,13 @@ async function genRecurring(){
   const viewedEnd=(typeof curYear!=='undefined'&&typeof curMonth!=='undefined')?new Date(curYear,curMonth,0):today;
   const base=viewedEnd>today?viewedEnd:today;
   const fmtD=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  // Calcula dueDate proporcional: mantém o mesmo offset em dias em relação à date de cada ocorrência
+  // Calcula dueDate proporcional: mantém o mesmo offset em dias entre date e dueDate do template
   const calcDueDate=(tplDate,tplDue,occDate)=>{
     if(!tplDue||!tplDate)return tplDue||'';
     const [ty,tm,td]=tplDate.split('-').map(Number);
     const [dy,dm,dd]=tplDue.split('-').map(Number);
     const offsetDays=Math.round((new Date(dy,dm-1,dd)-new Date(ty,tm-1,td))/86400000);
-    if(offsetDays<=0)return tplDue;
+    if(offsetDays<0)return tplDue; // vencimento antes da data — não ajustar
     const [oy,om,od]=occDate.split('-').map(Number);
     const d=new Date(oy,om-1,od);d.setDate(d.getDate()+offsetDays);
     return fmtD(d);
@@ -1967,16 +1967,24 @@ async function genRecurring(){
     if(!rec.active)continue;
     if(rec.endDate){const[ey,em,ed]=rec.endDate.split('-').map(Number);if(today>new Date(ey,em-1,ed))continue;}
     const existing=await dbGetAll('transactions','recurrenceId',rec.id);
-    const exDates=new Set(existing.map(t=>t.date));
-    // Corrige dueDate das ocorrências pendentes que ainda estão com o valor original do template
-    if(rec.template.dueDate&&rec.template.date){
-      for(const t of existing){
-        if(t.status!=='paid'&&t.dueDate===rec.template.dueDate&&t.date!==rec.template.date){
+    // Deduplica: para cada data mantém apenas um lançamento (prioriza pagos)
+    const byDate={};
+    for(const t of existing){
+      if(!byDate[t.date]){byDate[t.date]=t;}
+      else if(t.status==='paid'&&byDate[t.date].status!=='paid'){await dbDelete('transactions',byDate[t.date].id);byDate[t.date]=t;}
+      else{await dbDelete('transactions',t.id);}
+    }
+    const unique=Object.values(byDate);
+    // Corrige dueDate de todas as ocorrências pendentes
+    if(rec.template.date){
+      for(const t of unique){
+        if(t.status!=='paid'){
           const corrected=calcDueDate(rec.template.date,rec.template.dueDate,t.date);
-          if(corrected&&corrected!==t.dueDate)await dbPut('transactions',{...t,dueDate:corrected});
+          if(corrected!==t.dueDate)await dbPut('transactions',{...t,dueDate:corrected});
         }
       }
     }
+    const exDates=new Set(unique.map(t=>t.date));
     const dates=getOccs(rec,base);
     for(const date of dates){
       if(!exDates.has(date)){
