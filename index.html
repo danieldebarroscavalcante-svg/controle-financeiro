@@ -1898,12 +1898,13 @@ async function openSettingsModal(){
     inp.click();
   });
   document.getElementById('btn-repair').addEventListener('click',async()=>{
-    if(!confirm('Remover lançamentos recorrentes duplicados e corrigir as datas de vencimento deste aparelho?'))return;
+    if(!confirm('Reparar este aparelho?\n\n• Junta recorrências IDÊNTICAS duplicadas (mesma descrição, valor e frequência), mantendo uma de cada\n• Remove ocorrências recorrentes duplicadas\n• Corrige as datas de vencimento\n\nOcorrências já PAGAS são preservadas. Recomendo Exportar backup antes.'))return;
     try{
+      const dr=await dedupeRecurrences();
       const n=await repairRecurring();
       await genRecurring();
       await refresh().catch(console.error);
-      alert('✅ Reparo concluído: '+n+' ajustes aplicados.');
+      alert('✅ Reparo concluído.\n\n• '+dr.removedRecs+' recorrência(s) duplicada(s) removida(s)\n• '+dr.removedTx+' lançamento(s) duplicado(s) removido(s)\n• '+n+' outros ajustes (datas/ocorrências)');
     }catch(e){alert('❌ Falha no reparo: '+(e&&e.message||e));}
   });
   document.getElementById('btn-fb-make-truth').addEventListener('click',async()=>{
@@ -2100,6 +2101,29 @@ async function repairRecurring(){
     }
   }
   return changed;
+}
+
+// Junta recorrências IDÊNTICAS duplicadas (mesmo tipo+descrição+valor+frequência).
+// Mantém uma (ativa > com ocorrência paga > início mais antigo) e remove as demais e
+// suas ocorrências PENDENTES (ocorrências pagas são preservadas como histórico).
+// NÃO roda sozinha — só pelo botão Reparar, pois apagar recorrências é irreversível.
+async function dedupeRecurrences(){
+  const recs=await dbGetAll('recurrences');
+  const groups={};
+  for(const r of recs){const t=r.template||{};const k=[t.type,(t.description||'').trim().toLowerCase(),t.amount,r.frequency].join('|');(groups[k]=groups[k]||[]).push(r);}
+  let removedRecs=0,removedTx=0;
+  for(const k in groups){
+    const arr=groups[k];if(arr.length<2)continue;
+    const meta=[];
+    for(const r of arr){const occ=await dbGetAll('transactions','recurrenceId',r.id);meta.push({r,occ,paid:occ.some(t=>t.status==='paid')});}
+    meta.sort((a,b)=>{if(!!b.r.active!==!!a.r.active)return (b.r.active?1:0)-(a.r.active?1:0);if(b.paid!==a.paid)return (b.paid?1:0)-(a.paid?1:0);return String(a.r.startDate||'').localeCompare(String(b.r.startDate||''));});
+    for(let i=1;i<meta.length;i++){
+      const loser=meta[i];
+      for(const t of loser.occ){if(t.status!=='paid'){await dbDelete('transactions',t.id);removedTx++;}}
+      await dbDelete('recurrences',loser.r.id);removedRecs++;
+    }
+  }
+  return {removedRecs,removedTx};
 }
 function getOccs(rec,upTo){
   const r=[];
