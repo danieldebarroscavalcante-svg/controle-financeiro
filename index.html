@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.17.2">
+<meta name="version" content="2026.06.17.3">
 <title>Finance Control System</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23c95007'/%3E%3Ctext x='32' y='48' font-family='Arial Black,Arial,sans-serif' font-size='46' font-weight='900' fill='white' text-anchor='middle'%3E%24%3C/text%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23c95007'/%3E%3Ctext x='32' y='48' font-family='Arial Black,Arial,sans-serif' font-size='46' font-weight='900' fill='white' text-anchor='middle'%3E%24%3C/text%3E%3C/svg%3E">
@@ -855,7 +855,7 @@ form{padding:20px 24px}
       Categorias
     </div>
   </nav>
-  <div class="sidebar-footer">Dados sincronizados na nuvem ☁️</div>
+  <div class="sidebar-footer">Dados sincronizados na nuvem ☁️ <span id="app-version" style="opacity:.55"></span></div>
 </aside>
 <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
@@ -1507,7 +1507,8 @@ async function fbRestoreAll(){
 // RECUPERAÇÃO: substitui TODA a nuvem pelos dados deste aparelho (este vira a fonte da verdade)
 async function fbReplaceCloudWithLocal(){
   if(!isFirebaseReady())return 0;
-  await _fbDb.ref(`users/${_fbUser.uid}`).remove();
+  await _fbDb.ref(`users/${_fbUser.uid}`).remove(); // remove dados + _tombstones da nuvem
+  fcSaveTombstones(new Set()); // este aparelho é a verdade: sem exclusões pendentes
   return await fbPushAll();
 }
 // RECUPERAÇÃO: substitui TODO este aparelho pela versão da nuvem (apaga local sincronizável e baixa a nuvem)
@@ -1517,6 +1518,7 @@ async function fbReplaceLocalWithCloud(){
     const items=await _idbGetAll(s);
     for(const it of items){if(it&&it.id!=null)await _idbDelete(s,it.id);} // local-only: NÃO propaga p/ nuvem
   }
+  fcSaveTombstones(new Set()); // nuvem é a verdade: descarta exclusões locais antigas
   return await fbRestoreAll();
 }
 
@@ -1553,7 +1555,7 @@ async function fbSyncOnLogin(){
     // Limpeza idempotente após a união (remove duplicatas de recorrência e corrige vencimentos; propaga p/ nuvem)
     await repairRecurring().catch(console.error);
     const _dups=await dedupeCategories();
-    if(pulled>0||_dups>0){if(typeof refresh==='function')await refresh().catch(console.error);}
+    if(pulled>0||killed>0||_dups>0){if(typeof refresh==='function')await refresh().catch(console.error);}
   }catch(e){console.error('FB sync on login:',e);}
 }
 
@@ -2187,6 +2189,7 @@ let widgetsOrder=['previsto','contaprincipal','fluxo','comparativo','top5'];
 
 // ══ INIT ══════════════════════════════════════════════════════════════
 async function init(){
+  try{const _v=document.querySelector('meta[name=version]');const _e=document.getElementById('app-version');if(_v&&_e)_e.textContent='v'+_v.content;}catch(e){}
   await openDB();await seed();await seedAccounts();await migrateCatIcons();await dedupeCategories();await repairRecurring();await genRecurring();
   // restore widgets order
   const so=localStorage.getItem('fc_widgets_order');
