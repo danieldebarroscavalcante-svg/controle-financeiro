@@ -1475,6 +1475,10 @@ async function _idbPut(store,item){
   const d=await openDB();
   return new Promise((res,rej)=>{const r=d.transaction(store,'readwrite').objectStore(store).put(item);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);});
 }
+async function _idbDelete(store,id){
+  const d=await openDB();
+  return new Promise((res,rej)=>{const r=d.transaction(store,'readwrite').objectStore(store).delete(id);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);});
+}
 
 const FB_STORES=['categories','transactions','recurrences','invoices','documentos','accounts','creditcards','cc_invoices'];
 
@@ -1500,36 +1504,45 @@ async function fbRestoreAll(){
   return n;
 }
 
+// RECUPERAÇÃO: substitui TODA a nuvem pelos dados deste aparelho (este vira a fonte da verdade)
+async function fbReplaceCloudWithLocal(){
+  if(!isFirebaseReady())return 0;
+  await _fbDb.ref(`users/${_fbUser.uid}`).remove();
+  return await fbPushAll();
+}
+// RECUPERAÇÃO: substitui TODO este aparelho pela versão da nuvem (apaga local sincronizável e baixa a nuvem)
+async function fbReplaceLocalWithCloud(){
+  if(!isFirebaseReady())return 0;
+  for(const s of FB_STORES){
+    const items=await _idbGetAll(s);
+    for(const it of items){if(it&&it.id!=null)await _idbDelete(s,it.id);} // local-only: NÃO propaga p/ nuvem
+  }
+  return await fbRestoreAll();
+}
+
 async function fbSyncOnLogin(){
   if(!isFirebaseReady())return;
   try{
-    // Conta registros locais em TODOS os stores (não só transações)
-    let localCount=0;
-    for(const s of FB_STORES){localCount+=(await _idbGetAll(s)).length;}
-    // Conta registros na nuvem em todos os stores
-    const snap=await _fbDb.ref(`users/${_fbUser.uid}`).get();
-    let cloudCount=0;
-    if(snap.exists()){
-      const data=snap.val()||{};
-      for(const s of FB_STORES){if(data[s])cloudCount+=Object.keys(data[s]).length;}
+    // SINCRONIZAÇÃO POR UNIÃO (não-destrutiva): adiciona o que falta em cada lado,
+    // NUNCA sobrescreve um registro que já existe nos dois (evita perda/divergência).
+    // Para escolher qual aparelho é a "versão correta", use os botões de recuperação
+    // em Configurações → Backup e Recuperação.
+    let pushed=0,pulled=0;
+    for(const s of FB_STORES){
+      const localItems=await _idbGetAll(s);
+      const localIds=new Set(localItems.map(i=>i.id));
+      const snap=await _fbDb.ref(`users/${_fbUser.uid}/${s}`).get();
+      const cloudObj=snap.exists()?(snap.val()||{}):{};
+      const cloudItems=Object.values(cloudObj).filter(Boolean);
+      const cloudIds=new Set(cloudItems.map(i=>i.id));
+      for(const item of localItems){if(item&&item.id!=null&&!cloudIds.has(item.id)){await _fbDb.ref(fbPath(s,item.id)).set(item);pushed++;}}
+      for(const item of cloudItems){if(item&&item.id!=null&&!localIds.has(item.id)){await _idbPut(s,item);pulled++;}}
     }
-    if(cloudCount>localCount){
-      // Nuvem tem mais dados (ex: novo dispositivo) → restaura
-      const n=await fbRestoreAll();
-      if(n>0){
-        setTimeout(async()=>{
-          if(typeof refresh==='function')await refresh().catch(console.error);
-          alert(`☁️ ${n} registros restaurados da nuvem com sucesso!`);
-        },800);
-      }
-    } else if(localCount>0){
-      // Local tem dados (>= nuvem) → garante que tudo está na nuvem
-      const n=await fbPushAll();
-      console.log('FC: '+n+' registros locais enviados para Firebase');
-    }
-    // Remove categorias duplicadas que possam ter surgido do sync (limpa local + nuvem)
+    console.log(`FC sync (união): +${pushed} na nuvem, +${pulled} local`);
+    // Limpeza idempotente após a união (remove duplicatas de recorrência e corrige vencimentos; propaga p/ nuvem)
+    await repairRecurring().catch(console.error);
     const _dups=await dedupeCategories();
-    if(_dups>0){console.log('FC: '+_dups+' categorias duplicadas removidas');if(typeof refresh==='function')await refresh().catch(console.error);}
+    if(pulled>0||_dups>0){if(typeof refresh==='function')await refresh().catch(console.error);}
   }catch(e){console.error('FB sync on login:',e);}
 }
 
