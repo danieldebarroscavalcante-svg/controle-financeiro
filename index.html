@@ -1797,6 +1797,23 @@ async function openSettingsModal(){
       </div>
     </div>
 
+    <div class="settings-section">
+      <h3>💾 Backup e Recuperação</h3>
+      <p class="section-desc">Salve uma cópia dos dados em arquivo, importe um backup, ou escolha qual aparelho tem a versão correta.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn outline" id="btn-backup-export">⬇️ Exportar backup (arquivo)</button>
+        <button type="button" class="btn outline" id="btn-backup-import">⬆️ Importar backup (arquivo)</button>
+        <button type="button" class="btn outline" id="btn-repair">🧹 Reparar duplicatas / vencimentos</button>
+      </div>
+      <div class="alert-row" style="margin-top:14px;align-items:flex-start">
+        <div class="alert-info">Recuperação entre aparelhos<small>Use quando os dados divergiram. Primeiro defina o aparelho correto, depois baixe nos demais.</small></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+        <button type="button" class="btn outline" id="btn-fb-make-truth">✅ Este aparelho é o correto → enviar p/ nuvem</button>
+        <button type="button" class="btn outline" id="btn-fb-take-truth">☁️ Baixar nuvem → substituir este aparelho</button>
+      </div>
+    </div>
+
     <div class="modal-footer">
       <button type="button" class="btn ghost" id="cancel-settings">Cancelar</button>
       <button type="button" class="btn outline" id="test-alert">Testar e-mail</button>
@@ -1845,6 +1862,66 @@ async function openSettingsModal(){
     const n=await fbRestoreAll();
     if(n>0){await refresh().catch(console.error);alert(`✅ ${n} registros restaurados da nuvem!`);}
     else{alert('Nenhum dado encontrado na nuvem para este usuário.');}
+  });
+
+  // Handlers Backup e Recuperação
+  document.getElementById('btn-backup-export').addEventListener('click',async()=>{
+    try{
+      const db={};
+      for(const s of FB_STORES){db[s]=await _idbGetAll(s);}
+      const ls={};
+      for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('fc_'))ls[k]=localStorage.getItem(k);}
+      const total=Object.values(db).reduce((a,v)=>a+v.length,0);
+      const blob=new Blob([JSON.stringify({db,ls,exportedAt:new Date().toISOString()})],{type:'application/json'});
+      const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+      a.download='backup-financeiro-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.json';
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+      alert('✅ Backup gerado com '+total+' registros. Verifique a pasta Downloads.');
+    }catch(e){alert('❌ Falha ao gerar backup: '+(e&&e.message||e));}
+  });
+  document.getElementById('btn-backup-import').addEventListener('click',()=>{
+    const inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';
+    inp.onchange=async()=>{
+      if(!inp.files||!inp.files[0])return;
+      if(!confirm('Importar este backup? Os lançamentos do arquivo serão adicionados/atualizados neste aparelho (nada é apagado).'))return;
+      try{
+        const obj=JSON.parse(await inp.files[0].text());
+        const data=obj.db||obj;let n=0;
+        for(const s of FB_STORES){if(Array.isArray(data[s])){for(const it of data[s]){if(it&&it.id!=null){await dbPut(s,it);n++;}}}}
+        if(obj.ls){for(const k in obj.ls){if(k.startsWith('fc_')&&k!=='fc_auth_v1'&&k!=='fc_firebase_config'&&k!=='fc_session_v1')localStorage.setItem(k,obj.ls[k]);}}
+        await repairRecurring().catch(console.error);
+        await refresh().catch(console.error);
+        alert('✅ '+n+' registros importados do backup!');
+      }catch(e){alert('❌ Não foi possível ler o arquivo: '+(e&&e.message||e));}
+    };
+    inp.click();
+  });
+  document.getElementById('btn-repair').addEventListener('click',async()=>{
+    if(!confirm('Remover lançamentos recorrentes duplicados e corrigir as datas de vencimento deste aparelho?'))return;
+    try{
+      const n=await repairRecurring();
+      await genRecurring();
+      await refresh().catch(console.error);
+      alert('✅ Reparo concluído: '+n+' ajustes aplicados.');
+    }catch(e){alert('❌ Falha no reparo: '+(e&&e.message||e));}
+  });
+  document.getElementById('btn-fb-make-truth').addEventListener('click',async()=>{
+    if(!isFirebaseReady()){alert('Firebase não conectado. Salve o config e reconecte primeiro.');return;}
+    if(!confirm('Tornar ESTE aparelho a versão correta?\n\nIsso SUBSTITUI todos os dados da nuvem pelos deste aparelho. Nos outros aparelhos, depois use "Baixar nuvem → substituir este aparelho".'))return;
+    try{
+      const n=await fbReplaceCloudWithLocal();
+      alert('✅ Nuvem substituída com '+n+' registros deste aparelho.\n\nAgora, nos OUTROS aparelhos, abra Configurações → "Baixar nuvem → substituir este aparelho".');
+    }catch(e){alert('❌ Falha ao enviar: '+(e&&e.message||e));}
+  });
+  document.getElementById('btn-fb-take-truth').addEventListener('click',async()=>{
+    if(!isFirebaseReady()){alert('Firebase não conectado. Salve o config e reconecte primeiro.');return;}
+    if(!confirm('Baixar a versão da nuvem e SUBSTITUIR os dados deste aparelho?\n\nOs dados atuais deste aparelho serão apagados e trocados pelos da nuvem. Faça um Exportar backup antes, por garantia.'))return;
+    try{
+      const n=await fbReplaceLocalWithCloud();
+      await refresh().catch(console.error);
+      alert('✅ Este aparelho agora está igual à nuvem ('+n+' registros).');
+    }catch(e){alert('❌ Falha ao baixar: '+(e&&e.message||e));}
   });
 
   document.getElementById('settings-form').onsubmit=async e=>{
@@ -1957,6 +2034,24 @@ async function seed(){const ex=await dbGetAll('categories');if(ex.length)return;
 ];for(const c of defs)await dbPut('categories',c);}
 
 // ══ RECURRENCE ════════════════════════════════════════════════════════
+// Helpers de recorrência (escopo de módulo)
+function fmtLocalDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+// id DETERMINÍSTICO por (recorrência, data): dois aparelhos geram o MESMO id,
+// então a sincronização por união não cria duplicatas.
+function recurOccId(recId,date){return `rec_${recId}_${date}`;}
+// dueDate proporcional: mantém o mesmo offset em dias entre date e dueDate do template
+function calcRecurDueDate(tplDate,tplDue,occDate){
+  if(!tplDue||!tplDate)return tplDue||'';
+  const [ty,tm,td]=tplDate.split('-').map(Number);
+  const [dy,dm,dd]=tplDue.split('-').map(Number);
+  const offsetDays=Math.round((new Date(dy,dm-1,dd)-new Date(ty,tm-1,td))/86400000);
+  if(offsetDays<0)return tplDue; // vencimento antes da data — não ajustar
+  const [oy,om,od]=occDate.split('-').map(Number);
+  const d=new Date(oy,om-1,od);d.setDate(d.getDate()+offsetDays);
+  return fmtLocalDate(d);
+}
+
+// Gera ocorrências futuras. NÃO altera nem apaga registros existentes (limpeza fica em repairRecurring).
 async function genRecurring(){
   const recs=await dbGetAll('recurrences');
   const today=new Date();today.setHours(0,0,0,0);
@@ -1964,48 +2059,47 @@ async function genRecurring(){
   // assim ao navegar para meses futuros as recorrências continuam aparecendo.
   const viewedEnd=(typeof curYear!=='undefined'&&typeof curMonth!=='undefined')?new Date(curYear,curMonth,0):today;
   const base=viewedEnd>today?viewedEnd:today;
-  const fmtD=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  // Calcula dueDate proporcional: mantém o mesmo offset em dias entre date e dueDate do template
-  const calcDueDate=(tplDate,tplDue,occDate)=>{
-    if(!tplDue||!tplDate)return tplDue||'';
-    const [ty,tm,td]=tplDate.split('-').map(Number);
-    const [dy,dm,dd]=tplDue.split('-').map(Number);
-    const offsetDays=Math.round((new Date(dy,dm-1,dd)-new Date(ty,tm-1,td))/86400000);
-    if(offsetDays<0)return tplDue; // vencimento antes da data — não ajustar
-    const [oy,om,od]=occDate.split('-').map(Number);
-    const d=new Date(oy,om-1,od);d.setDate(d.getDate()+offsetDays);
-    return fmtD(d);
-  };
   for(const rec of recs){
     if(!rec.active)continue;
     if(rec.endDate){const[ey,em,ed]=rec.endDate.split('-').map(Number);if(today>new Date(ey,em-1,ed))continue;}
     const existing=await dbGetAll('transactions','recurrenceId',rec.id);
-    // Deduplica: para cada data mantém apenas um lançamento (prioriza pagos)
-    const byDate={};
-    for(const t of existing){
-      if(!byDate[t.date]){byDate[t.date]=t;}
-      else if(t.status==='paid'&&byDate[t.date].status!=='paid'){await dbDelete('transactions',byDate[t.date].id);byDate[t.date]=t;}
-      else{await dbDelete('transactions',t.id);}
-    }
-    const unique=Object.values(byDate);
-    // Corrige dueDate de todas as ocorrências pendentes
-    if(rec.template.date){
-      for(const t of unique){
-        if(t.status!=='paid'){
-          const corrected=calcDueDate(rec.template.date,rec.template.dueDate,t.date);
-          if(corrected!==t.dueDate)await dbPut('transactions',{...t,dueDate:corrected});
-        }
-      }
-    }
-    const exDates=new Set(unique.map(t=>t.date));
+    const exDates=new Set(existing.map(t=>t.date));
     const dates=getOccs(rec,base);
     for(const date of dates){
       if(!exDates.has(date)){
-        const dueDate=calcDueDate(rec.template.date,rec.template.dueDate,date);
-        await dbPut('transactions',{...rec.template,id:uid(),date,dueDate,recurrenceId:rec.id,status:'pending',attachments:[]});
+        const dueDate=calcRecurDueDate(rec.template.date,rec.template.dueDate,date);
+        await dbPut('transactions',{...rec.template,id:recurOccId(rec.id,date),date,dueDate,recurrenceId:rec.id,status:'pending',attachments:[]});
       }
     }
   }
+}
+
+// Limpeza idempotente e segura: por (recorrência, data) mantém só um lançamento
+// (prioriza pago, depois id determinístico) e corrige o vencimento dos pendentes.
+async function repairRecurring(){
+  const recs=await dbGetAll('recurrences');
+  let changed=0;
+  for(const rec of recs){
+    const existing=await dbGetAll('transactions','recurrenceId',rec.id);
+    const groups={};
+    for(const t of existing){(groups[t.date]=groups[t.date]||[]).push(t);}
+    for(const date in groups){
+      const arr=groups[date];
+      if(arr.length>1){
+        arr.sort((a,b)=>{
+          const ap=a.status==='paid'?0:1,bp=b.status==='paid'?0:1;if(ap!==bp)return ap-bp;
+          const ad=a.id===recurOccId(rec.id,date)?0:1,bd=b.id===recurOccId(rec.id,date)?0:1;return ad-bd;
+        });
+        for(let i=1;i<arr.length;i++){await dbDelete('transactions',arr[i].id);changed++;}
+      }
+      const keep=arr[0];
+      if(keep.status!=='paid'&&rec.template&&rec.template.date){
+        const corrected=calcRecurDueDate(rec.template.date,rec.template.dueDate,keep.date);
+        if(corrected!==keep.dueDate){await dbPut('transactions',{...keep,dueDate:corrected});changed++;}
+      }
+    }
+  }
+  return changed;
 }
 function getOccs(rec,upTo){
   const r=[];
@@ -2048,7 +2142,7 @@ let widgetsOrder=['previsto','contaprincipal','fluxo','comparativo','top5'];
 
 // ══ INIT ══════════════════════════════════════════════════════════════
 async function init(){
-  await openDB();await seed();await seedAccounts();await migrateCatIcons();await dedupeCategories();await genRecurring();
+  await openDB();await seed();await seedAccounts();await migrateCatIcons();await dedupeCategories();await repairRecurring();await genRecurring();
   // restore widgets order
   const so=localStorage.getItem('fc_widgets_order');
   if(so){try{widgetsOrder=JSON.parse(so);}catch(e){}}
