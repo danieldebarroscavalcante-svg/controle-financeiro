@@ -1527,7 +1527,12 @@ async function fbSyncOnLogin(){
     // NUNCA sobrescreve um registro que já existe nos dois (evita perda/divergência).
     // Para escolher qual aparelho é a "versão correta", use os botões de recuperação
     // em Configurações → Backup e Recuperação.
-    let pushed=0,pulled=0;
+    // Tombstones: une os marcadores de exclusão local + nuvem
+    const tomb=fcLoadTombstones();
+    const tsnap=await _fbDb.ref(`users/${_fbUser.uid}/_tombstones`).get();
+    if(tsnap.exists()){const o=tsnap.val()||{};for(const k in o)tomb.add(k);}
+    fcSaveTombstones(tomb);
+    let pushed=0,pulled=0,killed=0;
     for(const s of FB_STORES){
       const localItems=await _idbGetAll(s);
       const localIds=new Set(localItems.map(i=>i.id));
@@ -1535,10 +1540,16 @@ async function fbSyncOnLogin(){
       const cloudObj=snap.exists()?(snap.val()||{}):{};
       const cloudItems=Object.values(cloudObj).filter(Boolean);
       const cloudIds=new Set(cloudItems.map(i=>i.id));
-      for(const item of localItems){if(item&&item.id!=null&&!cloudIds.has(item.id)){await _fbDb.ref(fbPath(s,item.id)).set(item);pushed++;}}
-      for(const item of cloudItems){if(item&&item.id!=null&&!localIds.has(item.id)){await _idbPut(s,item);pulled++;}}
+      // 1) aplica exclusões: remove os tombstoned de local E da nuvem
+      for(const item of localItems){if(item&&item.id!=null&&tomb.has(tombKey(s,item.id))){await _idbDelete(s,item.id);killed++;}}
+      for(const item of cloudItems){if(item&&item.id!=null&&tomb.has(tombKey(s,item.id))){await _fbDb.ref(fbPath(s,item.id)).remove();}}
+      // 2) união, ignorando ids excluídos
+      for(const item of localItems){if(item&&item.id!=null&&!cloudIds.has(item.id)&&!tomb.has(tombKey(s,item.id))){await _fbDb.ref(fbPath(s,item.id)).set(item);pushed++;}}
+      for(const item of cloudItems){if(item&&item.id!=null&&!localIds.has(item.id)&&!tomb.has(tombKey(s,item.id))){await _idbPut(s,item);pulled++;}}
     }
-    console.log(`FC sync (união): +${pushed} na nuvem, +${pulled} local`);
+    // Garante que as exclusões locais (inclusive offline) estão registradas na nuvem
+    for(const k of tomb){await _fbDb.ref(`users/${_fbUser.uid}/_tombstones/${k}`).set(Date.now()).catch(()=>{});}
+    console.log(`FC sync (união): +${pushed} nuvem, +${pulled} local, ${killed} exclusões aplicadas`);
     // Limpeza idempotente após a união (remove duplicatas de recorrência e corrige vencimentos; propaga p/ nuvem)
     await repairRecurring().catch(console.error);
     const _dups=await dedupeCategories();
@@ -1566,8 +1577,18 @@ const DB='FinanceDB',VER=5;let _db;
 function openDB(){return new Promise((res,rej)=>{if(_db)return res(_db);const r=indexedDB.open(DB,VER);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('categories')){const c=d.createObjectStore('categories',{keyPath:'id'});c.createIndex('type','type',{unique:false});}if(!d.objectStoreNames.contains('transactions')){const t=d.createObjectStore('transactions',{keyPath:'id'});t.createIndex('date','date',{unique:false});t.createIndex('recurrenceId','recurrenceId',{unique:false});t.createIndex('installmentGroupId','installmentGroupId',{unique:false});}if(!d.objectStoreNames.contains('recurrences'))d.createObjectStore('recurrences',{keyPath:'id'});if(!d.objectStoreNames.contains('invoices'))d.createObjectStore('invoices',{keyPath:'id'});if(!d.objectStoreNames.contains('documentos'))d.createObjectStore('documentos',{keyPath:'id'});if(!d.objectStoreNames.contains('accounts'))d.createObjectStore('accounts',{keyPath:'id'});if(!d.objectStoreNames.contains('creditcards'))d.createObjectStore('creditcards',{keyPath:'id'});if(!d.objectStoreNames.contains('cc_invoices')){const ci=d.createObjectStore('cc_invoices',{keyPath:'id'});ci.createIndex('cardId','cardId',{unique:false});}};r.onsuccess=e=>{_db=e.target.result;res(_db);};r.onerror=e=>rej(e.target.error);});}
 async function dbGet(s,id){const d=await openDB();return new Promise((res,rej)=>{const r=d.transaction(s,'readonly').objectStore(s).get(id);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
 async function dbGetAll(s,idx,q){const d=await openDB();return new Promise((res,rej)=>{const os=d.transaction(s,'readonly').objectStore(s);const r=idx?os.index(idx).getAll(q):os.getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
-async function dbPut(s,item){const d=await openDB();const result=await new Promise((res,rej)=>{const r=d.transaction(s,'readwrite').objectStore(s).put(item);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});if(isFirebaseReady())_fbDb.ref(fbPath(s,item.id)).set(item).catch(e=>console.warn('FB sync:',e));return result;}
-async function dbDelete(s,id){const d=await openDB();await new Promise((res,rej)=>{const r=d.transaction(s,'readwrite').objectStore(s).delete(id);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);});if(isFirebaseReady())_fbDb.ref(fbPath(s,id)).remove().catch(e=>console.warn('FB del:',e));}
+// ── TOMBSTONES (marcadores de exclusão) ───────────────────────────────
+// Sem isto, a sincronização por união ressuscita o que foi excluído: se outro
+// aparelho ainda tem o registro, ele reenvia p/ a nuvem e este baixa de volta.
+const TOMB_KEY='fc_tombstones';
+function tombKey(store,id){return store+'__'+id;}
+function fcLoadTombstones(){try{return new Set(JSON.parse(localStorage.getItem(TOMB_KEY)||'[]'));}catch(e){return new Set();}}
+function fcSaveTombstones(set){try{localStorage.setItem(TOMB_KEY,JSON.stringify([...set]));}catch(e){}}
+function fcAddTombstone(store,id){const s=fcLoadTombstones();s.add(tombKey(store,id));fcSaveTombstones(s);if(isFirebaseReady())_fbDb.ref(`users/${_fbUser.uid}/_tombstones/${tombKey(store,id)}`).set(Date.now()).catch(()=>{});}
+function fcRemoveTombstone(store,id){const r=localStorage.getItem(TOMB_KEY);if(!r||r==='[]')return;const s=fcLoadTombstones();if(s.delete(tombKey(store,id))){fcSaveTombstones(s);if(isFirebaseReady())_fbDb.ref(`users/${_fbUser.uid}/_tombstones/${tombKey(store,id)}`).remove().catch(()=>{});}}
+
+async function dbPut(s,item){const d=await openDB();const result=await new Promise((res,rej)=>{const r=d.transaction(s,'readwrite').objectStore(s).put(item);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});if(item&&item.id!=null)fcRemoveTombstone(s,item.id);if(isFirebaseReady())_fbDb.ref(fbPath(s,item.id)).set(item).catch(e=>console.warn('FB sync:',e));return result;}
+async function dbDelete(s,id){const d=await openDB();await new Promise((res,rej)=>{const r=d.transaction(s,'readwrite').objectStore(s).delete(id);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);});fcAddTombstone(s,id);if(isFirebaseReady())_fbDb.ref(fbPath(s,id)).remove().catch(e=>console.warn('FB del:',e));}
 function uid(){return crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36);}
 
 // ══ HELPERS ═══════════════════════════════════════════════════════════
