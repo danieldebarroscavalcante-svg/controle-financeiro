@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.17.3">
+<meta name="version" content="2026.06.18">
 <title>Finance Control System</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23c95007'/%3E%3Ctext x='32' y='48' font-family='Arial Black,Arial,sans-serif' font-size='46' font-weight='900' fill='white' text-anchor='middle'%3E%24%3C/text%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23c95007'/%3E%3Ctext x='32' y='48' font-family='Arial Black,Arial,sans-serif' font-size='46' font-weight='900' fill='white' text-anchor='middle'%3E%24%3C/text%3E%3C/svg%3E">
@@ -1553,6 +1553,7 @@ async function fbSyncOnLogin(){
     for(const k of tomb){await _fbDb.ref(`users/${_fbUser.uid}/_tombstones/${k}`).set(Date.now()).catch(()=>{});}
     console.log(`FC sync (união): +${pushed} nuvem, +${pulled} local, ${killed} exclusões aplicadas`);
     // Limpeza idempotente após a união (remove duplicatas de recorrência e corrige vencimentos; propaga p/ nuvem)
+    await dedupeRecurrences().catch(console.error);
     await repairRecurring().catch(console.error);
     const _dups=await dedupeCategories();
     if(pulled>0||killed>0||_dups>0){if(typeof refresh==='function')await refresh().catch(console.error);}
@@ -2127,9 +2128,10 @@ async function repairRecurring(){
 }
 
 // Junta recorrências IDÊNTICAS duplicadas (mesmo tipo+descrição+valor+frequência).
-// Mantém uma (ativa > com ocorrência paga > início mais antigo) e remove as demais e
-// suas ocorrências PENDENTES (ocorrências pagas são preservadas como histórico).
-// NÃO roda sozinha — só pelo botão Reparar, pois apagar recorrências é irreversível.
+// RODA AUTOMÁTICA (init + sync) para os dois aparelhos se auto-limparem.
+// Vencedor DETERMINÍSTICO = menor id -> os dois aparelhos escolhem o MESMO, sem
+// "flapping" (um apagar o que o outro mantém). Mescla no vencedor: fica ativo se
+// qualquer um era, usa o início mais antigo, e PRESERVA ocorrências pagas.
 async function dedupeRecurrences(){
   const recs=await dbGetAll('recurrences');
   const groups={};
@@ -2137,13 +2139,18 @@ async function dedupeRecurrences(){
   let removedRecs=0,removedTx=0;
   for(const k in groups){
     const arr=groups[k];if(arr.length<2)continue;
-    const meta=[];
-    for(const r of arr){const occ=await dbGetAll('transactions','recurrenceId',r.id);meta.push({r,occ,paid:occ.some(t=>t.status==='paid')});}
-    meta.sort((a,b)=>{if(!!b.r.active!==!!a.r.active)return (b.r.active?1:0)-(a.r.active?1:0);if(b.paid!==a.paid)return (b.paid?1:0)-(a.paid?1:0);return String(a.r.startDate||'').localeCompare(String(b.r.startDate||''));});
-    for(let i=1;i<meta.length;i++){
-      const loser=meta[i];
-      for(const t of loser.occ){if(t.status!=='paid'){await dbDelete('transactions',t.id);removedTx++;}}
-      await dbDelete('recurrences',loser.r.id);removedRecs++;
+    arr.sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+    const winner=arr[0],losers=arr.slice(1);
+    const anyActive=arr.some(r=>r.active);
+    const minStart=arr.map(r=>r.startDate).filter(Boolean).sort()[0]||winner.startDate;
+    if(winner.active!==anyActive||winner.startDate!==minStart){winner.active=anyActive;winner.startDate=minStart;await dbPut('recurrences',winner);}
+    for(const loser of losers){
+      const occ=await dbGetAll('transactions','recurrenceId',loser.id);
+      for(const t of occ){
+        if(t.status==='paid'){const wid=recurOccId(winner.id,t.date);await dbPut('transactions',{...t,id:wid,recurrenceId:winner.id});}
+        await dbDelete('transactions',t.id);removedTx++;
+      }
+      await dbDelete('recurrences',loser.id);removedRecs++;
     }
   }
   return {removedRecs,removedTx};
@@ -2190,7 +2197,7 @@ let widgetsOrder=['previsto','contaprincipal','fluxo','comparativo','top5'];
 // ══ INIT ══════════════════════════════════════════════════════════════
 async function init(){
   try{const _v=document.querySelector('meta[name=version]');const _e=document.getElementById('app-version');if(_v&&_e)_e.textContent='v'+_v.content;}catch(e){}
-  await openDB();await seed();await seedAccounts();await migrateCatIcons();await dedupeCategories();await repairRecurring();await genRecurring();
+  await openDB();await seed();await seedAccounts();await migrateCatIcons();await dedupeCategories();await dedupeRecurrences();await repairRecurring();await genRecurring();
   // restore widgets order
   const so=localStorage.getItem('fc_widgets_order');
   if(so){try{widgetsOrder=JSON.parse(so);}catch(e){}}
