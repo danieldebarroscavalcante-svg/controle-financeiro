@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.4">
+<meta name="version" content="2026.06.18.5">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -3063,6 +3063,65 @@ async function openAccountModal(id){
     if(curView==='dashboard')await renderDashboard();
   };
   document.getElementById('account-modal').classList.add('open');
+}
+
+// ══ MOVIMENTAR SALDO (extrato por conta) ══════════════════════════════
+function fmtDateTime(iso){const d=new Date(iso);if(isNaN(d))return'';const p=n=>String(n).padStart(2,'0');return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;}
+function getMovements(acc){return (Array.isArray(acc.movements)?acc.movements:Object.values(acc.movements||{})).filter(Boolean);}
+async function openSaldoModal(id){
+  const acc=await dbGet('accounts',id);
+  if(!acc){alert('Conta não encontrada.');return;}
+  const isMain=acc.type==='main';
+  const renderBody=()=>{
+    const movs=getMovements(acc).sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+    const extrato=movs.length?movs.map(mv=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 2px;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:${mv.amount>=0?'var(--green)':'var(--red)'}">${mv.amount>=0?'+ ':'− '}${fmt(Math.abs(mv.amount))}</div>
+          <div style="font-size:11px;color:var(--text3)">${fmtDateTime(mv.ts)}${mv.note?' · '+esc(mv.note):''}</div>
+        </div>
+        <div style="font-size:11.5px;color:var(--text2);white-space:nowrap">saldo ${fmt(mv.balanceAfter)}</div>
+      </div>`).join(''):'<div class="empty-state" style="padding:14px 0;font-size:12px">Nenhuma movimentação ainda.</div>';
+    document.getElementById('saldo-modal-title').textContent='Movimentar Saldo';
+    document.getElementById('saldo-body').innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px">
+        <div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);font-weight:700">${esc(acc.name)}</div>
+          <div style="font-size:24px;font-weight:800;color:${(parseFloat(acc.balance)||0)>=0?'var(--green)':'var(--red)'}">${fmt(acc.balance||0)}</div>
+          <div style="font-size:11px;color:var(--text3)">${isMain?'Saldo de abertura (o painel mostra abertura + lançamentos pagos)':'Saldo atual'}</div>
+        </div>
+        <span class="acc-icon" style="background:${acc.color}18;color:${acc.color};width:48px;height:48px;flex-shrink:0">${catIcon(acc.icon)}</span>
+      </div>
+      <div class="two-col">
+        <div class="form-group"><label>Valor (R$)</label><input type="text" inputmode="decimal" id="saldo-amount" placeholder="0,00"></div>
+        <div class="form-group"><label>Descrição (opcional)</label><input type="text" id="saldo-note" placeholder="Ex: aporte, rendimento..."></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:18px">
+        <button type="button" class="btn outline" id="saldo-sub" style="flex:1">− Retirar</button>
+        <button type="button" class="btn primary" id="saldo-add" style="flex:1">+ Adicionar</button>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">📜 Extrato (${movs.length})</div>
+      <div style="max-height:240px;overflow-y:auto">${extrato}</div>`;
+    attachCurrencyMask(document.getElementById('saldo-amount'));
+    const apply=async(sign)=>{
+      const val=parseCurrency(document.getElementById('saldo-amount').value);
+      if(!val||val<=0){alert('Informe um valor maior que zero.');return;}
+      const amount=sign*val;
+      acc.balance=Math.round(((parseFloat(acc.balance)||0)+amount)*100)/100; // arredonda a centavos
+      const arr=getMovements(acc);
+      arr.push({id:uid(),ts:new Date().toISOString(),amount,balanceAfter:acc.balance,note:document.getElementById('saldo-note').value.trim()});
+      acc.movements=arr;
+      await dbPut('accounts',acc);
+      renderBody();
+      await renderContasCC();
+      if(curView==='dashboard')await renderDashboard();
+    };
+    document.getElementById('saldo-add').addEventListener('click',()=>apply(1));
+    document.getElementById('saldo-sub').addEventListener('click',()=>apply(-1));
+  };
+  renderBody();
+  document.getElementById('close-saldo').onclick=()=>document.getElementById('saldo-modal').classList.remove('open');
+  document.getElementById('saldo-modal').classList.add('open');
 }
 
 // ══ CARTÃO DE CRÉDITO ═════════════════════════════════════════════════
