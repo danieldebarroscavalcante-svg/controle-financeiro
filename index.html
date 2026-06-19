@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.5">
+<meta name="version" content="2026.06.18.6">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -301,6 +301,8 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .accounts-section{margin-bottom:28px}
 .accounts-section h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:14px}
 .accounts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+/* Cards 50% mais largos (260->390) em Conta Principal, Poupança e Investimentos; só >=768px p/ não estourar no mobile */
+@media(min-width:768px){#acc-main,#acc-savings,#acc-investment{grid-template-columns:repeat(auto-fill,minmax(390px,1fr))}}
 .account-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:18px;display:flex;align-items:center;gap:14px;position:relative;transition:box-shadow .15s;cursor:default}
 .account-card:hover{box-shadow:var(--shadow-md)}
 .account-card.is-main{border-color:var(--primary);background:linear-gradient(135deg,#fff 0%,var(--primary-xl) 100%)}
