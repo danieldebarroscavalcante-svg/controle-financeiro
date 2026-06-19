@@ -1822,7 +1822,7 @@ async function openSettingsModal(){
     </div>
 
     <div class="settings-section">
-      <h3>💾 Backup e Recuperação</h3>
+      <h3>💾 Backup e Recuperação <span style="font-weight:600;font-size:11px;color:var(--primary);background:var(--primary-xl);padding:2px 8px;border-radius:10px;vertical-align:middle">v${(document.querySelector('meta[name=version]')||{}).content||'?'}</span></h3>
       <p class="section-desc">Salve uma cópia dos dados em arquivo, importe um backup, ou escolha qual aparelho tem a versão correta.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button type="button" class="btn outline" id="btn-backup-export">⬇️ Exportar backup (arquivo)</button>
