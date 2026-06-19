@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.1">
+<meta name="version" content="2026.06.18.2">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1930,9 +1930,10 @@ async function openSettingsModal(){
     try{
       const dr=await dedupeRecurrences();
       const n=await repairRecurring();
+      const mm=await dedupeByMonth();
       await genRecurring();
       await refresh().catch(console.error);
-      alert('✅ Reparo concluído.\n\n• '+dr.removedRecs+' recorrência(s) duplicada(s) removida(s)\n• '+dr.removedTx+' lançamento(s) duplicado(s) removido(s)\n• '+n+' outros ajustes (datas/ocorrências)');
+      alert('✅ Reparo concluído.\n\n• '+dr.removedRecs+' recorrência(s) duplicada(s) removida(s)\n• '+(dr.removedTx+mm)+' lançamento(s) duplicado(s) removido(s)\n• '+n+' ajuste(s) de data/ocorrência');
     }catch(e){alert('❌ Falha no reparo: '+(e&&e.message||e));}
   });
   document.getElementById('btn-fb-make-truth').addEventListener('click',async()=>{
