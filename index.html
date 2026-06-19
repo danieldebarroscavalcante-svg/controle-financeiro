@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.2">
+<meta name="version" content="2026.06.18.3">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2349,12 +2349,14 @@ async function refresh(){
 async function renderPatrimony(){
   const allTx=await dbGetAll('transactions');
   const prefix=`${curYear}-${String(curMonth).padStart(2,'0')}`;
-  const txs=allTx.filter(t=>t.date&&t.date.startsWith(prefix));
-  const incPaid=txs.filter(t=>t.type==='income'&&t.status==='paid').reduce((s,t)=>s+t.amount,0);
-  const expPaid=txs.filter(t=>t.type==='expense'&&t.status==='paid').reduce((s,t)=>s+t.amount,0);
+  const txs=allTx.filter(t=>t.date&&t.date.startsWith(prefix));               // mês visualizado (Previsão)
+  const upTo=allTx.filter(t=>t.date&&t.date.slice(0,7)<=prefix);              // acumulado até o fim do mês (Saldo)
+  // Saldo Atual ACUMULADO: carrega a sobra/déficit dos meses anteriores (pagos)
+  const saldo=upTo.filter(t=>t.type==='income'&&t.status==='paid').reduce((s,t)=>s+t.amount,0)
+            -upTo.filter(t=>t.type==='expense'&&t.status==='paid').reduce((s,t)=>s+t.amount,0);
+  // Previsão do Mês: apenas o mês visualizado (receitas - despesas previstas)
   const incTotal=txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
   const expTotal=txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-  const saldo=incPaid-expPaid;
   const previsao=incTotal-expTotal;
   const savings=await getAccountsTotal('savings');
   const investment=await getAccountsTotal('investment');
@@ -2495,15 +2497,19 @@ async function renderContaPrincipal(){
   const expPaid=txs.filter(t=>t.type==='expense'&&t.status==='paid').reduce((s,t)=>s+t.amount,0);
   const incTotal=txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
   const expTotal=txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-  const saldo=incPaid-expPaid;
-  const prev=incTotal-expTotal;
+  const saldoMes=incPaid-expPaid;   // realizado DO MÊS (usado no termômetro)
+  const prev=incTotal-expTotal;     // previsão do mês
+  // Saldo atual ACUMULADO: carrega a sobra/déficit dos meses anteriores (pagos até o fim do mês visualizado)
+  const upTo=allTx.filter(t=>t.date&&t.date.slice(0,7)<=prefix);
+  const saldo=upTo.filter(t=>t.type==='income'&&t.status==='paid').reduce((s,t)=>s+t.amount,0)
+            -upTo.filter(t=>t.type==='expense'&&t.status==='paid').reduce((s,t)=>s+t.amount,0);
   const mainAcct=await getMainAccount();
   const mainName=mainAcct?mainAcct.name:'Conta Principal';
-  // Termômetro: % do realizado em relação ao previsto (0 a 100)
+  // Termômetro: % do realizado DO MÊS em relação ao previsto do mês (0 a 100)
   let thermoPct=50,thermoStatus='Equilibrado',thermoColor='var(--yellow)';
-  if(saldo<0){thermoPct=8;thermoStatus='Crítico';thermoColor='var(--red)';}
-  else if(prev>0){thermoPct=Math.min(100,Math.max(5,(saldo/prev)*100));}
-  else if(prev<=0&&saldo>=0){thermoPct=85;}
+  if(saldoMes<0){thermoPct=8;thermoStatus='Crítico';thermoColor='var(--red)';}
+  else if(prev>0){thermoPct=Math.min(100,Math.max(5,(saldoMes/prev)*100));}
+  else if(prev<=0&&saldoMes>=0){thermoPct=85;}
   if(thermoPct>=60){thermoStatus='Saudável';thermoColor='var(--green)';}
   else if(thermoPct>=35){thermoStatus='Atenção';thermoColor='var(--yellow)';}
   else{thermoStatus='Crítico';thermoColor='var(--red)';}
