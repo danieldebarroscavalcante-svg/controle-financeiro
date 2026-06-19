@@ -1558,6 +1558,7 @@ async function fbSyncOnLogin(){
     // Limpeza idempotente após a união (remove duplicatas de recorrência e corrige vencimentos; propaga p/ nuvem)
     await dedupeRecurrences().catch(console.error);
     await repairRecurring().catch(console.error);
+    await dedupeByMonth().catch(console.error);
     const _dups=await dedupeCategories();
     if(pulled>0||killed>0||_dups>0){if(typeof refresh==='function')await refresh().catch(console.error);}
   }catch(e){console.error('FB sync on login:',e);}
@@ -2091,12 +2092,17 @@ async function genRecurring(){
     if(!rec.active)continue;
     if(rec.endDate){const[ey,em,ed]=rec.endDate.split('-').map(Number);if(today>new Date(ey,em-1,ed))continue;}
     const existing=await dbGetAll('transactions','recurrenceId',rec.id);
-    const exDates=new Set(existing.map(t=>t.date));
+    // Para frequências mensais+, considera o MÊS já coberto (evita regerar quando o
+    // usuário moveu a data de uma ocorrência dentro do mês -> não cria duplicata).
+    const byMonth=['monthly','bimonthly','quarterly','yearly'].includes(rec.frequency);
+    const covered=new Set(existing.map(t=>byMonth?String(t.date||'').slice(0,7):t.date));
     const dates=getOccs(rec,base);
     for(const date of dates){
-      if(!exDates.has(date)){
+      const key=byMonth?date.slice(0,7):date;
+      if(!covered.has(key)){
         const dueDate=calcRecurDueDate(rec.template.date,rec.template.dueDate,date);
         await dbPut('transactions',{...rec.template,id:recurOccId(rec.id,date),date,dueDate,recurrenceId:rec.id,status:'pending',attachments:[]});
+        covered.add(key);
       }
     }
   }
@@ -2158,6 +2164,35 @@ async function dedupeRecurrences(){
   }
   return {removedRecs,removedTx};
 }
+
+// Limpeza por MÊS: pega duplicatas de uma MESMA conta no mesmo mês mesmo que estejam
+// em registros diferentes (um avulso sem recorrência, ou em dias diferentes do mês).
+// Só atua quando pelo menos um do grupo tem recurrenceId (= conta recorrente duplicada),
+// para não mexer em lançamentos avulsos legítimos. Mantém: pago > tem recorrência >
+// menor id (determinístico nos dois aparelhos -> sem flapping). Roda automática.
+async function dedupeByMonth(){
+  const txs=await dbGetAll('transactions');
+  const groups={};
+  for(const t of txs){
+    if(!t.date||t.installmentGroupId)continue; // não mexe em parcelamentos
+    const month=String(t.date).slice(0,7);
+    const k=[t.type,(t.description||'').trim().toLowerCase(),t.amount,month].join('|');
+    (groups[k]=groups[k]||[]).push(t);
+  }
+  let removed=0;
+  for(const k in groups){
+    const arr=groups[k];
+    if(arr.length<2)continue;
+    if(!arr.some(t=>t.recurrenceId))continue;
+    arr.sort((a,b)=>{
+      const ap=a.status==='paid'?0:1,bp=b.status==='paid'?0:1;if(ap!==bp)return ap-bp;
+      const ar=a.recurrenceId?0:1,br=b.recurrenceId?0:1;if(ar!==br)return ar-br;
+      return String(a.id).localeCompare(String(b.id));
+    });
+    for(let i=1;i<arr.length;i++){await dbDelete('transactions',arr[i].id);removed++;}
+  }
+  return removed;
+}
 function getOccs(rec,upTo){
   const r=[];
   // Parse YYYY-MM-DD como data LOCAL (evita shift de fuso que jogava o dia para o mês anterior)
@@ -2200,7 +2235,7 @@ let widgetsOrder=['previsto','contaprincipal','fluxo','comparativo','top5'];
 // ══ INIT ══════════════════════════════════════════════════════════════
 async function init(){
   try{const _v=document.querySelector('meta[name=version]');const _e=document.getElementById('app-version');if(_v&&_e)_e.textContent='v'+_v.content;}catch(e){}
-  await openDB();await seed();await seedAccounts();await migrateCatIcons();await dedupeCategories();await dedupeRecurrences();await repairRecurring();await genRecurring();
+  await openDB();await seed();await seedAccounts();await migrateCatIcons();await dedupeCategories();await dedupeRecurrences();await repairRecurring();await dedupeByMonth();await genRecurring();
   // restore widgets order
   const so=localStorage.getItem('fc_widgets_order');
   if(so){try{widgetsOrder=JSON.parse(so);}catch(e){}}
