@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.3">
+<meta name="version" content="2026.06.18.4">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2351,9 +2351,12 @@ async function renderPatrimony(){
   const prefix=`${curYear}-${String(curMonth).padStart(2,'0')}`;
   const txs=allTx.filter(t=>t.date&&t.date.startsWith(prefix));               // mês visualizado (Previsão)
   const upTo=allTx.filter(t=>t.date&&t.date.slice(0,7)<=prefix);              // acumulado até o fim do mês (Saldo)
-  // Saldo Atual ACUMULADO: carrega a sobra/déficit dos meses anteriores (pagos)
-  const saldo=upTo.filter(t=>t.type==='income'&&t.status==='paid').reduce((s,t)=>s+t.amount,0)
+  // Saldo Atual = saldo de abertura da conta principal + realizado (pagos) acumulado
+  const realizado=upTo.filter(t=>t.type==='income'&&t.status==='paid').reduce((s,t)=>s+t.amount,0)
             -upTo.filter(t=>t.type==='expense'&&t.status==='paid').reduce((s,t)=>s+t.amount,0);
+  const _main=await getMainAccount();
+  const abertura=_main?(parseFloat(_main.balance)||0):0;
+  const saldo=abertura+realizado;
   // Previsão do Mês: apenas o mês visualizado (receitas - despesas previstas)
   const incTotal=txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
   const expTotal=txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
@@ -2499,12 +2502,13 @@ async function renderContaPrincipal(){
   const expTotal=txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
   const saldoMes=incPaid-expPaid;   // realizado DO MÊS (usado no termômetro)
   const prev=incTotal-expTotal;     // previsão do mês
-  // Saldo atual ACUMULADO: carrega a sobra/déficit dos meses anteriores (pagos até o fim do mês visualizado)
+  // Saldo atual = abertura da conta principal + realizado (pagos) acumulado até o fim do mês
   const upTo=allTx.filter(t=>t.date&&t.date.slice(0,7)<=prefix);
-  const saldo=upTo.filter(t=>t.type==='income'&&t.status==='paid').reduce((s,t)=>s+t.amount,0)
+  const realizado=upTo.filter(t=>t.type==='income'&&t.status==='paid').reduce((s,t)=>s+t.amount,0)
             -upTo.filter(t=>t.type==='expense'&&t.status==='paid').reduce((s,t)=>s+t.amount,0);
   const mainAcct=await getMainAccount();
   const mainName=mainAcct?mainAcct.name:'Conta Principal';
+  const saldo=(mainAcct?(parseFloat(mainAcct.balance)||0):0)+realizado;
   // Termômetro: % do realizado DO MÊS em relação ao previsto do mês (0 a 100)
   let thermoPct=50,thermoStatus='Equilibrado',thermoColor='var(--yellow)';
   if(saldoMes<0){thermoPct=8;thermoStatus='Crítico';thermoColor='var(--red)';}
@@ -2979,24 +2983,32 @@ async function renderLancamentos(){
 // ══ CONTAS E CENTROS DE CUSTO ═════════════════════════════════════════
 async function renderContasCC(){
   const accts=await dbGetAll('accounts');
-  document.getElementById('acc-main').innerHTML=accountsHTML(accts.filter(a=>a.type==='main'),true);
+  // Realizado (pagos) acumulado até o fim do mês visualizado — somado à abertura da conta principal
+  const allTx=await dbGetAll('transactions');
+  const prefix=`${curYear}-${String(curMonth).padStart(2,'0')}`;
+  const upTo=allTx.filter(t=>t.date&&t.date.slice(0,7)<=prefix);
+  const realizado=upTo.filter(t=>t.type==='income'&&t.status==='paid').reduce((s,t)=>s+t.amount,0)-upTo.filter(t=>t.type==='expense'&&t.status==='paid').reduce((s,t)=>s+t.amount,0);
+  document.getElementById('acc-main').innerHTML=accountsHTML(accts.filter(a=>a.type==='main'),true,realizado);
   document.getElementById('acc-savings').innerHTML=accountsHTML(accts.filter(a=>a.type==='savings'));
   document.getElementById('acc-investment').innerHTML=accountsHTML(accts.filter(a=>a.type==='investment'));
   document.getElementById('acc-cc').innerHTML=accountsHTML(accts.filter(a=>a.type==='expense_center'));
 }
-function accountsHTML(accts,isMain){
+function accountsHTML(accts,isMain,mainRealizado){
   if(!accts.length)return'<p class="empty-state">Nenhuma conta cadastrada.</p>';
-  return accts.map(a=>`<div class="account-card ${a.isMain?'is-main':''}">
+  return accts.map(a=>{
+  // Conta principal: saldo exibido = abertura (campo balance) + realizado acumulado dos lançamentos pagos
+  const shown=(a.isMain&&typeof mainRealizado==='number')?((parseFloat(a.balance)||0)+mainRealizado):(parseFloat(a.balance)||0);
+  return `<div class="account-card ${a.isMain?'is-main':''}">
     <span class="acc-icon" style="background:${a.color}18;color:${a.color}">${catIcon(a.icon)}</span>
     <div class="acc-info">
       <div class="acc-name">${esc(a.name)}${a.isMain?'<span class="acc-main-badge">PRINCIPAL</span>':''}</div>
-      <div class="acc-balance ${(parseFloat(a.balance)||0)>=0?'pos':'neg'}">${fmt(a.balance||0)}</div>
+      <div class="acc-balance ${shown>=0?'pos':'neg'}">${fmt(shown)}</div>
     </div>
     <div class="acc-actions">
       <button class="btn-icon" onclick="FC.editAcc('${a.id}')" title="Editar">${I.edit}</button>
       ${!a.isMain?`<button class="btn-icon danger" onclick="FC.delAcc('${a.id}')" title="Excluir">${I.trash}</button>`:''}
     </div>
-  </div>`).join('');
+  </div>`;}).join('');
 }
 async function openAccountModal(id){
   const accts=await dbGetAll('accounts');
@@ -3022,7 +3034,7 @@ async function openAccountModal(id){
     </div>
     <div class="form-group">
       <label class="login-check" style="cursor:pointer"><input type="checkbox" id="acc-is-main" ${acc?.isMain?'checked':''}> Definir como conta principal</label>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px">Apenas uma conta pode ser a principal. O saldo desta é calculado pelos lançamentos pagos.</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Apenas uma conta pode ser a principal. Para a principal, o campo Saldo é o <strong>saldo de abertura</strong>; o saldo atual = abertura + lançamentos pagos.</div>
     </div>
     <div class="form-group"><label>Ícone</label><div class="icon-grid">${iconOpts}</div><input type="hidden" id="acc-icon" value="${acc?.icon||'bank'}"></div>
     <div class="form-group"><label>Cor</label><div class="color-grid">${colorOpts}</div><input type="hidden" id="acc-color" value="${acc?.color||'#c95007'}"></div>
