@@ -174,8 +174,13 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .greeting-sub{font-size:13px;color:var(--text3);margin-bottom:20px}
 
 /* ── DASHBOARD WIDGETS (DRAG-DROP) ───────────────── */
-.widgets-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
-.widget{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;transition:opacity .2s,transform .2s,box-shadow .2s}
+.widgets-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;grid-auto-flow:dense}
+.widget{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;transition:opacity .2s,transform .2s,box-shadow .2s;position:relative}
+.widget-resize{position:absolute;top:0;right:0;width:14px;height:100%;cursor:ew-resize;z-index:4;display:flex;align-items:center;justify-content:center;touch-action:none}
+.widget-resize::after{content:'';width:3px;height:36px;border-radius:3px;background:var(--border2);opacity:0;transition:opacity .15s,background .15s}
+.widget:hover .widget-resize::after{opacity:.55}
+.widget-resize:hover::after{opacity:1;background:var(--primary);height:48px}
+.widget.resizing{box-shadow:0 0 0 2px var(--primary);user-select:none}
 .widget.dragging{opacity:.4}
 .widget.drag-over{box-shadow:0 0 0 3px var(--primary)}
 .widget-w-4{grid-column:span 4}
@@ -932,7 +937,7 @@ form{padding:20px 24px}
   <!-- VIEW: DASHBOARD -->
   <div class="view active" id="view-dashboard">
     <div class="greeting" id="dash-greeting">Boa noite, Usuário.</div>
-    <div class="greeting-sub">Aqui está um resumo das suas finanças. Arraste os blocos para reorganizar.</div>
+    <div class="greeting-sub">Aqui está um resumo das suas finanças. Arraste a alça <strong>⠿</strong> para mover e a <strong>borda direita</strong> para redimensionar. <a onclick="FC.resetLayout()" style="color:var(--primary);cursor:pointer;font-weight:600;white-space:nowrap">↺ Restaurar layout</a></div>
     <div class="patrimony-grid" id="patrimony-grid"></div>
     <div class="widgets-grid" id="widgets-grid"></div>
   </div>
