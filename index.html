@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.8">
+<meta name="version" content="2026.06.18.9">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2379,7 +2379,7 @@ async function renderPatrimony(){
       <div class="pat-icon-circle">${ic.wallet}</div>
       <div class="pat-info"><div class="pat-label">Saldo Atual</div><div class="pat-value ${saldo>=0?'pos':'neg'}">${fmt(saldo)}</div></div>
     </div>
-    <div class="pat-card previsao clickable" onclick="FC.nav('lancamentos')" title="Ver lançamentos do mês">
+    <div class="pat-card previsao clickable" onclick="FC.nav('pagar')" title="Ver Contas a Pagar do mês">
       <div class="pat-icon-circle">${ic.target}</div>
       <div class="pat-info"><div class="pat-label">Previsão do Mês</div><div class="pat-value ${previsao>=0?'pos':'neg'}">${fmt(previsao)}</div></div>
     </div>
