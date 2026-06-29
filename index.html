@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.9">
+<meta name="version" content="2026.06.18.10">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2239,14 +2239,17 @@ let charts={};
 let pendFiles=[];
 let invItems=[];
 let widgetsOrder=['previsto','contaprincipal','fluxo','comparativo','top5'];
+let widgetWidths={}; // id -> nº de colunas (3..12); vazio = usa o padrão de WIDGET_DEFS
 
 // ══ INIT ══════════════════════════════════════════════════════════════
 async function init(){
   try{const _v=document.querySelector('meta[name=version]');const _e=document.getElementById('app-version');if(_v&&_e)_e.textContent='v'+_v.content;}catch(e){}
   await openDB();await seed();await seedAccounts();await migrateCatIcons();await dedupeCategories();await dedupeRecurrences();await repairRecurring();await dedupeByMonth();await genRecurring();
-  // restore widgets order
+  // restore widgets order + sizes
   const so=localStorage.getItem('fc_widgets_order');
   if(so){try{widgetsOrder=JSON.parse(so);}catch(e){}}
+  const sw=localStorage.getItem('fc_widget_sizes');
+  if(sw){try{widgetWidths=JSON.parse(sw)||{};}catch(e){}}
   setupNav();setupTopbar();setupModals();setupDropdowns();setupMobileMenu();setupTxTables();
   updateMonthLabel();
   await refresh();
@@ -2420,18 +2423,21 @@ async function renderDashboard(){
   // Build widget shells in order
   grid.innerHTML=widgetsOrder.map(id=>{
     const def=WIDGET_DEFS[id];if(!def)return'';
-    return`<div class="widget widget-w-${def.width}" data-widget="${id}" draggable="true">
+    const w=Math.max(3,Math.min(12,parseInt(widgetWidths[id])||def.width));
+    return`<div class="widget" data-widget="${id}" draggable="true" style="grid-column:span ${w}">
       <div class="widget-header">
-        <span class="drag-handle" title="Arraste">${I.grip}</span>
+        <span class="drag-handle" title="Arraste para mover">${I.grip}</span>
         <div class="widget-info">
           <div class="widget-title">${def.title}</div>
           ${def.sub?`<div class="widget-sub">${def.sub} · ${MONTHS_SHORT[curMonth-1]}/${curYear}</div>`:''}
         </div>
       </div>
       <div class="widget-body" id="wbody-${id}"></div>
+      <span class="widget-resize" title="Arraste para redimensionar"></span>
     </div>`;
   }).join('');
   setupDragDrop(grid);
+  setupResize(grid);
   // Render each widget content
   for(const id of widgetsOrder){
     const def=WIDGET_DEFS[id];if(!def)continue;
@@ -2455,6 +2461,34 @@ function saveOrder(){
   const order=Array.from(document.querySelectorAll('#widgets-grid .widget')).map(w=>w.dataset.widget);
   widgetsOrder=order;
   localStorage.setItem('fc_widgets_order',JSON.stringify(order));
+}
+function saveSizes(){try{localStorage.setItem('fc_widget_sizes',JSON.stringify(widgetWidths));}catch(e){}}
+
+// Redimensionar a largura do widget arrastando a borda direita (encaixa na grade de 12 colunas)
+function setupResize(container){
+  container.querySelectorAll('.widget-resize').forEach(h=>{
+    h.addEventListener('pointerdown',e=>{
+      e.preventDefault();e.stopPropagation();
+      const widget=h.closest('.widget');if(!widget)return;
+      const id=widget.dataset.widget;
+      widget.draggable=false;                 // impede o drag nativo durante o resize
+      widget.classList.add('resizing');
+      const gap=16;
+      const cell=(container.getBoundingClientRect().width+gap)/12; // largura de 1 coluna+gap
+      const left=widget.getBoundingClientRect().left;
+      let span=parseInt((widget.style.gridColumn.match(/\d+/)||[])[0])||(WIDGET_DEFS[id]?.width||5);
+      let moved=false;
+      const move=ev=>{moved=true;let s=Math.round((ev.clientX-left+gap)/cell);s=Math.max(3,Math.min(12,s));if(s!==span){span=s;widget.style.gridColumn='span '+s;}};
+      const up=()=>{
+        document.removeEventListener('pointermove',move);
+        document.removeEventListener('pointerup',up);
+        widget.classList.remove('resizing');widget.draggable=true;
+        if(moved){widgetWidths[id]=span;saveSizes();renderDashboard().catch(console.error);}
+      };
+      document.addEventListener('pointermove',move);
+      document.addEventListener('pointerup',up);
+    });
+  });
 }
 
 async function renderPrevisto(){
@@ -4369,6 +4403,13 @@ window.FC={
   editAcc:id=>openAccountModal(id),
   addSaldo:id=>openSaldoModal(id),
   nav:(view,anchor)=>navigate(view,anchor),
+  resetLayout:()=>{
+    widgetsOrder=['previsto','contaprincipal','fluxo','comparativo','top5'];
+    widgetWidths={};
+    localStorage.removeItem('fc_widget_sizes');
+    localStorage.setItem('fc_widgets_order',JSON.stringify(widgetsOrder));
+    renderDashboard().catch(console.error);
+  },
   movePat:async type=>{
     const accts=await dbGetAll('accounts');
     const list=type==='main'?accts.filter(a=>a.isMain||a.type==='main'):accts.filter(a=>a.type===type);
