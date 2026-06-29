@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.7">
+<meta name="version" content="2026.06.18.8">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -262,7 +262,14 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 
 /* ── PATRIMÔNIO HEADER ───────────────────────────── */
 .patrimony-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:22px}
-.pat-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 18px;display:flex;align-items:center;gap:14px;border-left:4px solid transparent;transition:transform .15s,box-shadow .15s}
+.pat-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 18px;display:flex;align-items:center;gap:14px;border-left:4px solid transparent;transition:transform .15s,box-shadow .15s;position:relative}
+.pat-card.clickable{cursor:pointer}
+.pat-card.clickable:hover{box-shadow:var(--shadow-md)}
+.pat-add{position:absolute;top:7px;right:7px;width:24px;height:24px;border-radius:7px;border:none;background:var(--bg);color:var(--primary);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:.55;transition:opacity .15s,background .15s;z-index:2;padding:0}
+.pat-add:hover{opacity:1;background:var(--primary-xl)}
+.pat-add svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round}
+.pat-card.total .pat-add{background:rgba(255,255,255,.15);color:#fff}
+.pat-card.total .pat-add:hover{background:rgba(255,255,255,.28)}
 .pat-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
 .pat-card.saldo{border-left-color:var(--primary)}
 .pat-card.previsao{border-left-color:var(--blue)}
@@ -815,22 +822,13 @@ form{padding:20px 24px}
       <svg class="icon" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       Página inicial
     </div>
-    <div class="nav-group" id="ng-transacoes">
-      <div class="nav-toggle" data-group="transacoes">
-        <svg class="icon" viewBox="0 0 24 24"><path d="m17 3 4 4-4 4"/><path d="M21 7H7a4 4 0 0 0-4 4v0"/><path d="m7 21-4-4 4-4"/><path d="M3 17h14a4 4 0 0 0 4-4v0"/></svg>
-        Transações
-        <svg class="icon chev" style="width:14px;height:14px" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
-      </div>
-      <div class="nav-sub">
-        <div class="nav-item" data-view="receber">
-          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="m12 8 4 4-4 4"/></svg>
-          Contas a Receber
-        </div>
-        <div class="nav-item" data-view="pagar">
-          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 12H8"/><path d="m12 16-4-4 4-4"/></svg>
-          Contas a Pagar
-        </div>
-      </div>
+    <div class="nav-item" data-view="receber">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="m12 8 4 4-4 4"/></svg>
+      Contas a Receber
+    </div>
+    <div class="nav-item" data-view="pagar">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 12H8"/><path d="m12 16-4-4 4-4"/></svg>
+      Contas a Pagar
     </div>
     <div class="nav-item" data-view="contas-cc">
       <svg class="icon" viewBox="0 0 24 24"><line x1="3" y1="21" x2="21" y2="21"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="5 6 12 3 19 6"/><line x1="4" y1="10" x2="4" y2="21"/><line x1="20" y1="10" x2="20" y2="21"/><line x1="8" y1="14" x2="8" y2="17"/><line x1="12" y1="14" x2="12" y2="17"/><line x1="16" y1="14" x2="16" y2="17"/></svg>
@@ -2261,16 +2259,15 @@ function setupNav(){
   document.querySelectorAll('.nav-toggle').forEach(el=>el.addEventListener('click',()=>{const grp=el.closest('.nav-group');grp.classList.toggle('open');}));
 }
 
-function navigate(view){
+function navigate(view,anchor){
   curView=view;
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
-  // expand parent group if receber/pagar
-  if(view==='receber'||view==='pagar'){document.getElementById('ng-transacoes').classList.add('open');}
   const el=document.getElementById(`view-${view}`);
   if(el)el.classList.add('active');
   document.getElementById('page-title').textContent=PAGE_TITLES[view]||view;
   refresh();
+  if(anchor){setTimeout(()=>{const a=document.getElementById(anchor);if(a&&a.scrollIntoView)a.scrollIntoView({behavior:'smooth',block:'center'});},280);}
 }
 
 function setupTopbar(){
@@ -2375,24 +2372,28 @@ async function renderPatrimony(){
     trend:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
     crown:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7Z"/><path d="M5 20h14"/></svg>',
   };
+  const plus='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
   document.getElementById('patrimony-grid').innerHTML=`
-    <div class="pat-card saldo">
+    <div class="pat-card saldo clickable" onclick="FC.nav('contas-cc','acc-main')" title="Abrir Conta Principal">
+      <button type="button" class="pat-add" title="Movimentar saldo" onclick="event.stopPropagation();FC.movePat('main')">${plus}</button>
       <div class="pat-icon-circle">${ic.wallet}</div>
       <div class="pat-info"><div class="pat-label">Saldo Atual</div><div class="pat-value ${saldo>=0?'pos':'neg'}">${fmt(saldo)}</div></div>
     </div>
-    <div class="pat-card previsao">
+    <div class="pat-card previsao clickable" onclick="FC.nav('lancamentos')" title="Ver lançamentos do mês">
       <div class="pat-icon-circle">${ic.target}</div>
       <div class="pat-info"><div class="pat-label">Previsão do Mês</div><div class="pat-value ${previsao>=0?'pos':'neg'}">${fmt(previsao)}</div></div>
     </div>
-    <div class="pat-card poupanca">
+    <div class="pat-card poupanca clickable" onclick="FC.nav('contas-cc','acc-savings')" title="Abrir Poupança">
+      <button type="button" class="pat-add" title="Movimentar saldo" onclick="event.stopPropagation();FC.movePat('savings')">${plus}</button>
       <div class="pat-icon-circle">${ic.piggy}</div>
       <div class="pat-info"><div class="pat-label">Poupança</div><div class="pat-value pos">${fmt(savings)}</div></div>
     </div>
-    <div class="pat-card invest">
+    <div class="pat-card invest clickable" onclick="FC.nav('contas-cc','acc-investment')" title="Abrir Investimentos">
+      <button type="button" class="pat-add" title="Movimentar saldo" onclick="event.stopPropagation();FC.movePat('investment')">${plus}</button>
       <div class="pat-icon-circle">${ic.trend}</div>
       <div class="pat-info"><div class="pat-label">Investimentos</div><div class="pat-value pos">${fmt(investment)}</div></div>
     </div>
-    <div class="pat-card total">
+    <div class="pat-card total clickable" onclick="FC.nav('contas-cc')" title="Abrir Contas e Centros">
       <div class="pat-icon-circle">${ic.crown}</div>
       <div class="pat-info"><div class="pat-label">Patrimônio Total</div><div class="pat-value">${fmt(patrimonio)}</div></div>
     </div>`;
@@ -4362,6 +4363,15 @@ window.FC={
   },
   editAcc:id=>openAccountModal(id),
   addSaldo:id=>openSaldoModal(id),
+  nav:(view,anchor)=>navigate(view,anchor),
+  movePat:async type=>{
+    const accts=await dbGetAll('accounts');
+    const list=type==='main'?accts.filter(a=>a.isMain||a.type==='main'):accts.filter(a=>a.type===type);
+    const anchor=type==='savings'?'acc-savings':type==='investment'?'acc-investment':'acc-main';
+    if(list.length===1)openSaldoModal(list[0].id);
+    else if(list.length===0){alert('Nenhuma conta deste tipo ainda. Crie em Contas e Centros.');navigate('contas-cc',anchor);}
+    else navigate('contas-cc',anchor); // várias contas: leva para a seção escolher
+  },
   delAcc:async id=>{
     const acc=await dbGet('accounts',id);
     if(acc?.isMain){alert('Não é possível excluir a conta principal.');return;}
