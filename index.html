@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.10">
+<meta name="version" content="2026.06.18.11">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -943,7 +943,7 @@ form{padding:20px 24px}
   <!-- VIEW: DASHBOARD -->
   <div class="view active" id="view-dashboard">
     <div class="greeting" id="dash-greeting">Boa noite, Usuário.</div>
-    <div class="greeting-sub">Aqui está um resumo das suas finanças. Arraste a alça <strong>⠿</strong> para mover e a <strong>borda direita</strong> para redimensionar. <a onclick="FC.resetLayout()" style="color:var(--primary);cursor:pointer;font-weight:600;white-space:nowrap">↺ Restaurar layout</a></div>
+    <div class="greeting-sub">Aqui está um resumo das suas finanças. Arraste a alça <strong>⠿</strong> para mover; a <strong>borda direita</strong> muda a largura, a <strong>inferior</strong> a altura e o <strong>canto</strong> os dois. <a onclick="FC.resetLayout()" style="color:var(--primary);cursor:pointer;font-weight:600;white-space:nowrap">↺ Restaurar layout</a></div>
     <div class="patrimony-grid" id="patrimony-grid"></div>
     <div class="widgets-grid" id="widgets-grid"></div>
   </div>
@@ -2246,6 +2246,7 @@ let pendFiles=[];
 let invItems=[];
 let widgetsOrder=['previsto','contaprincipal','fluxo','comparativo','top5'];
 let widgetWidths={}; // id -> nº de colunas (3..12); vazio = usa o padrão de WIDGET_DEFS
+let widgetHeights={}; // id -> altura mínima em px (vazio = automática)
 
 // ══ INIT ══════════════════════════════════════════════════════════════
 async function init(){
@@ -2256,6 +2257,8 @@ async function init(){
   if(so){try{widgetsOrder=JSON.parse(so);}catch(e){}}
   const sw=localStorage.getItem('fc_widget_sizes');
   if(sw){try{widgetWidths=JSON.parse(sw)||{};}catch(e){}}
+  const sh=localStorage.getItem('fc_widget_heights');
+  if(sh){try{widgetHeights=JSON.parse(sh)||{};}catch(e){}}
   setupNav();setupTopbar();setupModals();setupDropdowns();setupMobileMenu();setupTxTables();
   updateMonthLabel();
   await refresh();
@@ -2430,7 +2433,8 @@ async function renderDashboard(){
   grid.innerHTML=widgetsOrder.map(id=>{
     const def=WIDGET_DEFS[id];if(!def)return'';
     const w=Math.max(3,Math.min(12,parseInt(widgetWidths[id])||def.width));
-    return`<div class="widget" data-widget="${id}" draggable="true" style="grid-column:span ${w}">
+    const hpx=parseInt(widgetHeights[id])||0;
+    return`<div class="widget" data-widget="${id}" draggable="true" style="grid-column:span ${w}${hpx?';min-height:'+hpx+'px':''}">
       <div class="widget-header">
         <span class="drag-handle" title="Arraste para mover">${I.grip}</span>
         <div class="widget-info">
@@ -2439,7 +2443,9 @@ async function renderDashboard(){
         </div>
       </div>
       <div class="widget-body" id="wbody-${id}"></div>
-      <span class="widget-resize" title="Arraste para redimensionar"></span>
+      <span class="widget-resize rz-x" data-dir="x" title="Ajustar largura"></span>
+      <span class="widget-resize rz-y" data-dir="y" title="Ajustar altura"></span>
+      <span class="widget-resize rz-xy" data-dir="xy" title="Ajustar tamanho"></span>
     </div>`;
   }).join('');
   setupDragDrop(grid);
@@ -2468,7 +2474,7 @@ function saveOrder(){
   widgetsOrder=order;
   localStorage.setItem('fc_widgets_order',JSON.stringify(order));
 }
-function saveSizes(){try{localStorage.setItem('fc_widget_sizes',JSON.stringify(widgetWidths));}catch(e){}}
+function saveSizes(){try{localStorage.setItem('fc_widget_sizes',JSON.stringify(widgetWidths));localStorage.setItem('fc_widget_heights',JSON.stringify(widgetHeights));}catch(e){}}
 
 // Redimensionar a largura do widget arrastando a borda direita (encaixa na grade de 12 colunas)
 function setupResize(container){
@@ -2477,19 +2483,29 @@ function setupResize(container){
       e.preventDefault();e.stopPropagation();
       const widget=h.closest('.widget');if(!widget)return;
       const id=widget.dataset.widget;
+      const dir=h.dataset.dir||'x';
       widget.draggable=false;                 // impede o drag nativo durante o resize
       widget.classList.add('resizing');
       const gap=16;
       const cell=(container.getBoundingClientRect().width+gap)/12; // largura de 1 coluna+gap
-      const left=widget.getBoundingClientRect().left;
+      const r=widget.getBoundingClientRect();
       let span=parseInt((widget.style.gridColumn.match(/\d+/)||[])[0])||(WIDGET_DEFS[id]?.width||5);
+      let height=Math.round(r.height);
       let moved=false;
-      const move=ev=>{moved=true;let s=Math.round((ev.clientX-left+gap)/cell);s=Math.max(3,Math.min(12,s));if(s!==span){span=s;widget.style.gridColumn='span '+s;}};
+      const move=ev=>{
+        moved=true;
+        if(dir.includes('x')){let s=Math.round((ev.clientX-r.left+gap)/cell);s=Math.max(3,Math.min(12,s));if(s!==span){span=s;widget.style.gridColumn='span '+s;}}
+        if(dir.includes('y')){height=Math.max(150,Math.round(ev.clientY-r.top));widget.style.minHeight=height+'px';}
+      };
       const up=()=>{
         document.removeEventListener('pointermove',move);
         document.removeEventListener('pointerup',up);
         widget.classList.remove('resizing');widget.draggable=true;
-        if(moved){widgetWidths[id]=span;saveSizes();renderDashboard().catch(console.error);}
+        if(moved){
+          if(dir.includes('x'))widgetWidths[id]=span;
+          if(dir.includes('y'))widgetHeights[id]=height;
+          saveSizes();renderDashboard().catch(console.error);
+        }
       };
       document.addEventListener('pointermove',move);
       document.addEventListener('pointerup',up);
@@ -4411,8 +4427,8 @@ window.FC={
   nav:(view,anchor)=>navigate(view,anchor),
   resetLayout:()=>{
     widgetsOrder=['previsto','contaprincipal','fluxo','comparativo','top5'];
-    widgetWidths={};
-    localStorage.removeItem('fc_widget_sizes');
+    widgetWidths={};widgetHeights={};
+    localStorage.removeItem('fc_widget_sizes');localStorage.removeItem('fc_widget_heights');
     localStorage.setItem('fc_widgets_order',JSON.stringify(widgetsOrder));
     renderDashboard().catch(console.error);
   },
