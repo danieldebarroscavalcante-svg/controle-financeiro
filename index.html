@@ -21,7 +21,7 @@
   --primary:#c95007;--primary-d:#a84006;--primary-l:#FEE8D6;--primary-xl:#FFF4EE;
   --sidebar:#383838;--sidebar-hover:#4a4a4a;
   --page-bg:#f9f8f5;
-  --bg:#F1F5F9;--card:#FFFFFF;--border:#E2E8F0;--border2:#CBD5E1;
+  --bg:#F2F2F2;--card:#FFFFFF;--border:#E2E8F0;--border2:#CBD5E1;
   --text:#1E293B;--text2:#475569;--text3:#94A3B8;
   --green:#10B981;--green-l:#D1FAE5;--red:#EF4444;--red-l:#FEE2E2;
   --yellow:#F59E0B;--yellow-l:#FEF3C7;--blue:#3B82F6;
@@ -377,7 +377,7 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .badge-overdue{background:var(--red-l);color:var(--red)}
 .badge-fixa{background:#E0E7FF;color:#4338CA}
 .badge-variavel{background:#FEF3C7;color:#92400E}
-.badge-draft{background:#F1F5F9;color:#64748B}
+.badge-draft{background:#F2F2F2;color:#64748B}
 .badge-sent{background:#DBEAFE;color:#1D4ED8}
 .badge-inv-paid{background:var(--green-l);color:var(--green)}
 .badge-inv-over{background:var(--red-l);color:var(--red)}
@@ -394,7 +394,7 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .cell-amount.neg{color:var(--red)}
 .cell-actions{display:flex;gap:2px}
 .empty-row{text-align:center;color:var(--text3);padding:40px!important;font-size:13px}
-.col-filters th{padding:6px 10px;background:#f8fafc;border-top:1px solid var(--border)}
+.col-filters th{padding:6px 10px;background:#F8F8F8;border-top:1px solid var(--border)}
 .col-filters input,.col-filters select{width:100%;padding:5px 8px;font-size:11.5px;border:1px solid var(--border);border-radius:5px;font-family:inherit;background:#fff;outline:none;color:var(--text);min-width:0}
 .col-filters input:focus,.col-filters select:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-xl)}
 .col-filters input::placeholder{color:#cbd5e1;font-size:11px}
@@ -527,7 +527,7 @@ form{padding:20px 24px}
 .alert-badge{padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:var(--primary-l);color:var(--primary)}
 .alert-badge.ok{background:var(--green-l);color:var(--green)}
 .alert-badge.err{background:var(--red-l);color:var(--red)}
-.help-box{background:#f8fafc;border-left:3px solid var(--primary);border-radius:6px;padding:11px 14px;font-size:12px;color:var(--text2);line-height:1.6;margin-top:8px}
+.help-box{background:#F8F8F8;border-left:3px solid var(--primary);border-radius:6px;padding:11px 14px;font-size:12px;color:var(--text2);line-height:1.6;margin-top:8px}
 .help-box code{background:#fff;padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:11px;font-family:'Courier New',monospace}
 .help-box a{color:var(--primary);text-decoration:none;font-weight:600}
 .help-box a:hover{text-decoration:underline}
@@ -593,13 +593,13 @@ form{padding:20px 24px}
 .inv-doc-dates{display:flex;gap:24px;margin-top:8px;justify-content:flex-end}
 .inv-doc-dates span{font-size:11.5px;color:#64748b}
 .inv-doc-dates strong{color:#1e293b}
-.inv-parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;padding:18px;background:#f8fafc;border-radius:10px}
+.inv-parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;padding:18px;background:#F8F8F8;border-radius:10px}
 .inv-party-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:8px}
 .inv-party-name{font-size:14px;font-weight:700;margin-bottom:4px}
 .inv-party-info{font-size:11.5px;color:#475569;line-height:1.7}
 .inv-section-title{font-size:12px;font-weight:700;color:#475569;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
 .inv-items-tbl{width:100%;border-collapse:collapse;margin-bottom:20px}
-.inv-items-tbl thead tr{background:#f8fafc}
+.inv-items-tbl thead tr{background:#F8F8F8}
 .inv-items-tbl th{padding:10px 14px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;text-align:left}
 .inv-items-tbl th:nth-child(2),.inv-items-tbl th:nth-child(3),.inv-items-tbl th:nth-child(4){text-align:right}
 .inv-items-tbl td{padding:11px 14px;border-bottom:1px solid #e2e8f0;font-size:12.5px}
@@ -1832,7 +1832,7 @@ async function openSettingsModal(){
         1. Acesse <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> → crie um projeto<br>
         2. <strong>Authentication</strong> → Sign-in method → ative <strong>E-mail/senha</strong><br>
         3. <strong>Realtime Database</strong> → Criar banco → modo teste → mude as Regras para:<br>
-        <code style="display:block;background:#f1f5f9;padding:8px;border-radius:6px;margin:6px 0;font-size:11px;white-space:pre">{"rules":{"users":{"$uid":{".read":"$uid===auth.uid",".write":"$uid===auth.uid"}}}}</code>
+        <code style="display:block;background:#F2F2F2;padding:8px;border-radius:6px;margin:6px 0;font-size:11px;white-space:pre">{"rules":{"users":{"$uid":{".read":"$uid===auth.uid",".write":"$uid===auth.uid"}}}}</code>
         4. <strong>Configurações do projeto</strong> → Seus apps → adicione app Web → copie o objeto <code>firebaseConfig</code> e cole no campo acima<br>
         5. Clique em <strong>Salvar</strong> → faça logout e login novamente → seus dados sobem automaticamente
       </div>
@@ -2553,7 +2553,7 @@ function drawDonut(id,paid,total,color){
   const data=total>0?[paid,rem]:[1,0];
   charts[id]=new Chart(ctx.getContext('2d'),{
     type:'doughnut',
-    data:{datasets:[{data,backgroundColor:[color,'#F1F5F9'],borderWidth:0}]},
+    data:{datasets:[{data,backgroundColor:[color,'#F2F2F2'],borderWidth:0}]},
     options:{responsive:true,maintainAspectRatio:true,cutout:'78%',plugins:{legend:{display:false},tooltip:{enabled:false}}}
   });
 }
@@ -2653,7 +2653,7 @@ async function renderFluxoCaixa(){
       {type:'bar',label:'Despesas',data:exps,backgroundColor:'#EF4444',borderRadius:6,stack:'s'},
       {type:'line',label:'Saldo',data:bals,borderColor:'#c95007',backgroundColor:'transparent',borderWidth:2.5,tension:.3,pointBackgroundColor:'#c95007',pointRadius:4}
     ]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#475569',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(Math.abs(c.parsed.y))}`}}},scales:{x:{grid:{display:false},ticks:{color:'#94A3B8',font:{size:10}}},y:{grid:{color:'#F1F5F9'},ticks:{color:'#94A3B8',font:{size:10},callback:v=>'R$ '+v.toLocaleString('pt-BR')}}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#475569',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(Math.abs(c.parsed.y))}`}}},scales:{x:{grid:{display:false},ticks:{color:'#94A3B8',font:{size:10}}},y:{grid:{color:'#F2F2F2'},ticks:{color:'#94A3B8',font:{size:10},callback:v=>'R$ '+v.toLocaleString('pt-BR')}}}}
   });
 }
 
