@@ -176,10 +176,16 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 /* ── DASHBOARD WIDGETS (DRAG-DROP) ───────────────── */
 .widgets-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;grid-auto-flow:dense}
 .widget{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;transition:opacity .2s,transform .2s,box-shadow .2s;position:relative}
-.widget-resize{position:absolute;top:0;right:0;width:14px;height:100%;cursor:ew-resize;z-index:4;display:flex;align-items:center;justify-content:center;touch-action:none}
-.widget-resize::after{content:'';width:3px;height:36px;border-radius:3px;background:var(--border2);opacity:0;transition:opacity .15s,background .15s}
-.widget:hover .widget-resize::after{opacity:.55}
-.widget-resize:hover::after{opacity:1;background:var(--primary);height:48px}
+.widget-resize{position:absolute;z-index:4;touch-action:none;display:flex;align-items:center;justify-content:center}
+.widget-resize.rz-x{top:0;right:0;width:14px;bottom:14px;cursor:ew-resize}
+.widget-resize.rz-x::after{content:'';width:3px;height:36px;border-radius:3px;background:var(--border2);opacity:0;transition:opacity .15s,background .15s}
+.widget-resize.rz-y{left:0;right:14px;bottom:0;height:14px;cursor:ns-resize}
+.widget-resize.rz-y::after{content:'';height:3px;width:36px;border-radius:3px;background:var(--border2);opacity:0;transition:opacity .15s,background .15s}
+.widget-resize.rz-xy{right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize}
+.widget-resize.rz-xy::after{content:'';width:8px;height:8px;border-right:2px solid var(--border2);border-bottom:2px solid var(--border2);opacity:0;transition:opacity .15s,border-color .15s}
+.widget:hover .widget-resize::after{opacity:.5}
+.widget-resize.rz-x:hover::after,.widget-resize.rz-y:hover::after{opacity:1;background:var(--primary)}
+.widget-resize.rz-xy:hover::after{opacity:1;border-color:var(--primary)}
 .widget.resizing{box-shadow:0 0 0 2px var(--primary);user-select:none}
 .widget.dragging{opacity:.4}
 .widget.drag-over{box-shadow:0 0 0 3px var(--primary)}
