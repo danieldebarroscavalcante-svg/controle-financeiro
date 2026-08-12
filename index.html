@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.15">
+<meta name="version" content="2026.06.18.16">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1267,6 +1267,7 @@ async function tryAuth(){
 }
 
 function logout(){
+  try{if(typeof fbDetachListeners==='function')fbDetachListeners();}catch(e){}
   sessionStorage.removeItem(SESSION_KEY);
   showLoginScreen();
 }
@@ -1582,7 +1583,46 @@ async function fbSyncOnLogin(){
     await dedupeByMonth().catch(console.error);
     const _dups=await dedupeCategories();
     if(pulled>0||updated>0||killed>0||_dups>0){if(typeof refresh==='function')await refresh().catch(console.error);}
+    fbAttachListeners(); // sincronização AO VIVO (tempo real)
   }catch(e){console.error('FB sync on login:',e);}
+}
+
+// Sincronização ao vivo: escuta mudanças na nuvem e aplica localmente na hora.
+let _fbListeners=[];
+function fbDetachListeners(){for(const ref of _fbListeners){try{ref.off();}catch(e){}}_fbListeners=[];}
+function fbAttachListeners(){
+  if(!isFirebaseReady())return;
+  fbDetachListeners();
+  let _t=null;
+  const doRefresh=()=>{
+    // não interrompe o usuário no meio de um modal aberto ou edição inline
+    if(document.querySelector('.modal-overlay.open')||document.querySelector('td.ed.editing')){_t=setTimeout(doRefresh,1000);return;}
+    if(typeof refresh==='function')refresh().catch(console.error);
+  };
+  const scheduleRefresh=()=>{clearTimeout(_t);_t=setTimeout(doRefresh,600);};
+  for(const s of FB_STORES){
+    const ref=_fbDb.ref(`users/${_fbUser.uid}/${s}`);
+    const onUpsert=async snap=>{
+      try{
+        const item=snap.val();if(!item||item.id==null)return;
+        if(fcLoadTombstones().has(tombKey(s,item.id)))return;         // foi excluído localmente -> ignora
+        const local=await dbGet(s,item.id);
+        const lu=local?(+local.updatedAt||0):-1, cu=+item.updatedAt||0;
+        if(local&&cu<=lu)return;                                       // já temos essa versão (evita eco da própria gravação)
+        await _idbPut(s,item);
+        scheduleRefresh();
+      }catch(e){console.warn('live upsert:',e);}
+    };
+    const onRemove=async snap=>{
+      try{const rid=snap.key;if(rid==null)return;const local=await dbGet(s,rid);if(local){await _idbDelete(s,rid);scheduleRefresh();}}
+      catch(e){console.warn('live remove:',e);}
+    };
+    ref.on('child_added',onUpsert);
+    ref.on('child_changed',onUpsert);
+    ref.on('child_removed',onRemove);
+    _fbListeners.push(ref);
+  }
+  console.log('FC: sincronização ao vivo ativada ('+FB_STORES.length+' stores)');
 }
 
 function fbConnectAuthState(){
