@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.14">
+<meta name="version" content="2026.06.18.15">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1615,7 +1615,7 @@ function fcSaveTombstones(set){try{localStorage.setItem(TOMB_KEY,JSON.stringify(
 function fcAddTombstone(store,id){const s=fcLoadTombstones();s.add(tombKey(store,id));fcSaveTombstones(s);if(isFirebaseReady())_fbDb.ref(`users/${_fbUser.uid}/_tombstones/${tombKey(store,id)}`).set(Date.now()).catch(()=>{});}
 function fcRemoveTombstone(store,id){const r=localStorage.getItem(TOMB_KEY);if(!r||r==='[]')return;const s=fcLoadTombstones();if(s.delete(tombKey(store,id))){fcSaveTombstones(s);if(isFirebaseReady())_fbDb.ref(`users/${_fbUser.uid}/_tombstones/${tombKey(store,id)}`).remove().catch(()=>{});}}
 
-async function dbPut(s,item){const d=await openDB();const result=await new Promise((res,rej)=>{const r=d.transaction(s,'readwrite').objectStore(s).put(item);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});if(item&&item.id!=null)fcRemoveTombstone(s,item.id);if(isFirebaseReady())_fbDb.ref(fbPath(s,item.id)).set(item).catch(e=>console.warn('FB sync:',e));return result;}
+async function dbPut(s,item){if(item&&typeof item==='object'&&item.id!=null)item.updatedAt=Date.now();const d=await openDB();const result=await new Promise((res,rej)=>{const r=d.transaction(s,'readwrite').objectStore(s).put(item);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});if(item&&item.id!=null)fcRemoveTombstone(s,item.id);if(isFirebaseReady())_fbDb.ref(fbPath(s,item.id)).set(item).catch(e=>console.warn('FB sync:',e));return result;}
 async function dbDelete(s,id){const d=await openDB();await new Promise((res,rej)=>{const r=d.transaction(s,'readwrite').objectStore(s).delete(id);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);});fcAddTombstone(s,id);if(isFirebaseReady())_fbDb.ref(fbPath(s,id)).remove().catch(e=>console.warn('FB del:',e));}
 function uid(){return crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36);}
 
