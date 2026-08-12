@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.12">
+<meta name="version" content="2026.06.18.13">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2887,8 +2887,18 @@ async function startInlineEdit(td){
     if(committed)return;committed=true;
     const tx=await dbGet('transactions',id);
     if(!tx){restore();return;}
-    tx[field]=(type==='currency')?parseCurrency(val):val;
-    await dbPut('transactions',tx);
+    const newVal=(type==='currency')?parseCurrency(val):val;
+    // Recorrente + campo que não seja a data (data é por ocorrência):
+    // aplica nesta competência e em TODAS as subsequentes, e atualiza o template.
+    if(tx.recurrenceId&&field!=='date'){
+      const all=await dbGetAll('transactions','recurrenceId',tx.recurrenceId);
+      for(const t of all){if(t.date>=tx.date){t[field]=newVal;await dbPut('transactions',t);}}
+      const rec=await dbGet('recurrences',tx.recurrenceId);
+      if(rec&&rec.template){rec.template[field]=newVal;await dbPut('recurrences',rec);}
+    } else {
+      tx[field]=newVal;
+      await dbPut('transactions',tx);
+    }
     await refresh();
   };
   let editor;
