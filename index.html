@@ -1541,39 +1541,47 @@ async function fbReplaceLocalWithCloud(){
 async function fbSyncOnLogin(){
   if(!isFirebaseReady())return;
   try{
-    // SINCRONIZAÇÃO POR UNIÃO (não-destrutiva): adiciona o que falta em cada lado,
-    // NUNCA sobrescreve um registro que já existe nos dois (evita perda/divergência).
-    // Para escolher qual aparelho é a "versão correta", use os botões de recuperação
-    // em Configurações → Backup e Recuperação.
+    // SINCRONIZAÇÃO AUTOMÁTICA ao abrir: une os dois lados E propaga edições pelo
+    // carimbo de tempo (updatedAt) — o registro MAIS RECENTE vence nos dois sentidos.
+    // Assim, ao acessar de outro lugar, os dados chegam sozinhos (sem "Baixar da nuvem").
     // Tombstones: une os marcadores de exclusão local + nuvem
     const tomb=fcLoadTombstones();
     const tsnap=await _fbDb.ref(`users/${_fbUser.uid}/_tombstones`).get();
     if(tsnap.exists()){const o=tsnap.val()||{};for(const k in o)tomb.add(k);}
     fcSaveTombstones(tomb);
-    let pushed=0,pulled=0,killed=0;
+    let pushed=0,pulled=0,updated=0,killed=0;
     for(const s of FB_STORES){
       const localItems=await _idbGetAll(s);
-      const localIds=new Set(localItems.map(i=>i.id));
+      const localMap={};for(const it of localItems)if(it&&it.id!=null)localMap[it.id]=it;
       const snap=await _fbDb.ref(`users/${_fbUser.uid}/${s}`).get();
       const cloudObj=snap.exists()?(snap.val()||{}):{};
       const cloudItems=Object.values(cloudObj).filter(Boolean);
-      const cloudIds=new Set(cloudItems.map(i=>i.id));
+      const cloudMap={};for(const it of cloudItems)if(it&&it.id!=null)cloudMap[it.id]=it;
       // 1) aplica exclusões: remove os tombstoned de local E da nuvem
       for(const item of localItems){if(item&&item.id!=null&&tomb.has(tombKey(s,item.id))){await _idbDelete(s,item.id);killed++;}}
       for(const item of cloudItems){if(item&&item.id!=null&&tomb.has(tombKey(s,item.id))){await _fbDb.ref(fbPath(s,item.id)).remove();}}
-      // 2) união, ignorando ids excluídos
-      for(const item of localItems){if(item&&item.id!=null&&!cloudIds.has(item.id)&&!tomb.has(tombKey(s,item.id))){await _fbDb.ref(fbPath(s,item.id)).set(item);pushed++;}}
-      for(const item of cloudItems){if(item&&item.id!=null&&!localIds.has(item.id)&&!tomb.has(tombKey(s,item.id))){await _idbPut(s,item);pulled++;}}
+      // 2) local -> nuvem: adiciona o que falta; se existe nos dois, o mais recente vence
+      for(const item of localItems){
+        if(!item||item.id==null||tomb.has(tombKey(s,item.id)))continue;
+        const cl=cloudMap[item.id];
+        if(!cl){await _fbDb.ref(fbPath(s,item.id)).set(item);pushed++;}
+        else{const lu=+item.updatedAt||0,cu=+cl.updatedAt||0;if(lu>cu){await _fbDb.ref(fbPath(s,item.id)).set(item);updated++;}else if(cu>lu){await _idbPut(s,cl);updated++;}}
+      }
+      // 3) nuvem -> local: baixa o que só existe na nuvem
+      for(const item of cloudItems){
+        if(!item||item.id==null||tomb.has(tombKey(s,item.id)))continue;
+        if(!localMap[item.id]){await _idbPut(s,item);pulled++;}
+      }
     }
     // Garante que as exclusões locais (inclusive offline) estão registradas na nuvem
     for(const k of tomb){await _fbDb.ref(`users/${_fbUser.uid}/_tombstones/${k}`).set(Date.now()).catch(()=>{});}
-    console.log(`FC sync (união): +${pushed} nuvem, +${pulled} local, ${killed} exclusões aplicadas`);
+    console.log(`FC sync: +${pushed} nuvem, +${pulled} local, ${updated} atualizados, ${killed} excluídos`);
     // Limpeza idempotente após a união (remove duplicatas de recorrência e corrige vencimentos; propaga p/ nuvem)
     await dedupeRecurrences().catch(console.error);
     await repairRecurring().catch(console.error);
     await dedupeByMonth().catch(console.error);
     const _dups=await dedupeCategories();
-    if(pulled>0||killed>0||_dups>0){if(typeof refresh==='function')await refresh().catch(console.error);}
+    if(pulled>0||updated>0||killed>0||_dups>0){if(typeof refresh==='function')await refresh().catch(console.error);}
   }catch(e){console.error('FB sync on login:',e);}
 }
 
