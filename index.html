@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.18.13">
+<meta name="version" content="2026.06.18.14">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2826,14 +2826,19 @@ function payToggle(id,paid){
 function _bodyOf(view){return document.getElementById(view==='receber'?'receber-body':'pagar-body');}
 function getSelectedIds(view){const b=_bodyOf(view);return b?Array.from(b.querySelectorAll('.row-chk:checked')).map(c=>c.dataset.id):[];}
 function syncBulkBar(view){
-  const ids=getSelectedIds(view);
+  const b=_bodyOf(view);
+  const checked=b?Array.from(b.querySelectorAll('.row-chk:checked')):[];
+  const n=checked.length;
   const bar=document.getElementById(view+'-bulk');
   const count=document.getElementById(view+'-bulk-count');
-  if(bar)bar.classList.toggle('show',ids.length>0);
-  if(count)count.textContent=ids.length+' selecionado'+(ids.length===1?'':'s');
+  if(bar)bar.classList.toggle('show',n>0);
+  if(count){
+    let sum=0;
+    for(const c of checked){const cell=c.closest('tr')?.querySelector('[data-f="amount"]');if(cell)sum+=parseCurrency(cell.dataset.v||'0')||0;}
+    count.innerHTML=n+' selecionado'+(n===1?'':'s')+(n>0?` · Soma: <strong>${fmt(sum)}</strong>`:'');
+  }
   const all=document.querySelector(`.chk-all[data-chkall="${view}"]`);
-  const b=_bodyOf(view);
-  if(all&&b){const total=b.querySelectorAll('.row-chk').length;all.checked=total>0&&ids.length===total;all.indeterminate=ids.length>0&&ids.length<total;}
+  if(all&&b){const total=b.querySelectorAll('.row-chk').length;all.checked=total>0&&n===total;all.indeterminate=n>0&&n<total;}
 }
 function setupTxTables(){
   ['receber','pagar'].forEach(view=>{
