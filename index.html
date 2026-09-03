@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.19">
+<meta name="version" content="2026.06.19.1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -368,22 +368,15 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .pay-toggle button{background:none;border:none;padding:5px 11px;border-radius:6px;font-size:11.5px;font-weight:700;color:var(--text3);cursor:pointer;display:flex;align-items:center;gap:4px;font-family:inherit;transition:all .15s}
 .pay-toggle button .icon{color:currentColor;stroke:currentColor}
 .pay-toggle button:hover{color:var(--text)}
-.pay-toggle button.active.paid,.pay-toggle button.active.paid:hover{background:var(--green);color:#fff}
-.pay-toggle button.active.paid .icon{color:#fff!important;stroke:#fff!important}
-.pay-toggle button.active.unpaid,.pay-toggle button.active.unpaid:hover{background:var(--red);color:#fff}
-.pay-toggle button.active.unpaid .icon{color:#fff!important;stroke:#fff!important}
+.pay-toggle button.active.paid,.pay-toggle button.active.paid:hover{background:var(--primary);color:#151510}
+.pay-toggle button.active.paid .icon{color:#151510!important;stroke:#151510!important}
+.pay-toggle button.active.unpaid,.pay-toggle button.active.unpaid:hover{background:#54545A;color:#F0F0F0}
+.pay-toggle button.active.unpaid .icon{color:#F0F0F0!important;stroke:#F0F0F0!important}
 
 /* ── BADGES ──────────────────────────────────────── */
 .badge{padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:4px}
-.badge-paid{background:var(--green-l);color:var(--green)}
-.badge-pending{background:var(--yellow-l);color:var(--yellow)}
-.badge-overdue{background:var(--red-l);color:var(--red)}
-.badge-fixa{background:rgba(129,140,248,.18);color:#A5B4FC}
-.badge-variavel{background:rgba(245,166,35,.18);color:#F5C97A}
-.badge-draft{background:var(--bg);color:var(--text3)}
-.badge-sent{background:rgba(79,144,247,.18);color:#93C0FB}
-.badge-inv-paid{background:var(--green-l);color:var(--green)}
-.badge-inv-over{background:var(--red-l);color:var(--red)}
+/* Etiquetas monocromáticas em dourado */
+.badge-paid,.badge-pending,.badge-overdue,.badge-fixa,.badge-variavel,.badge-draft,.badge-sent,.badge-inv-paid,.badge-inv-over{background:var(--primary-l);color:var(--primary)}
 
 /* ── TABLES ──────────────────────────────────────── */
 .data-table{width:100%;border-collapse:collapse;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
