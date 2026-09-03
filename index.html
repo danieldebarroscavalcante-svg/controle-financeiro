@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.19.4">
+<meta name="version" content="2026.06.19.5">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Finanças">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -33,7 +33,7 @@
   --shadow-md:0 4px 14px rgba(0,0,0,.5);
   --shadow-lg:0 12px 34px rgba(0,0,0,.6);
 }
-body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--page-bg);color:var(--text);font-size:14px;min-height:100vh}
+body{font-family:'Poppins','Segoe UI',system-ui,sans-serif;background:var(--page-bg);color:var(--text);font-size:14px;min-height:100vh}
 .main{background:var(--page-bg)}
 #app{display:flex;height:100vh;overflow:hidden}
 
@@ -312,7 +312,7 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .thermo-segment{flex:1;border-right:1px solid rgba(0,0,0,.14);position:relative}
 .thermo-segment:last-child{border-right:none}
 .thermo-segment::after{content:'';position:absolute;top:0;left:0;right:0;height:50%;background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0))}
-.thermo-pointer-svg{position:absolute;top:-22px;width:22px;height:26px;transform:translateX(-50%);transition:left .7s cubic-bezier(.25,.46,.45,.94);z-index:3;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
+.thermo-pointer-svg{position:absolute;top:-10px;width:13px;height:8px;transform:translateX(-50%);transition:left .7s cubic-bezier(.25,.46,.45,.94);z-index:3;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
 .thermo-scale{display:flex;justify-content:space-between;font-size:9.5px;color:var(--text3);margin-top:6px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
 .thermo-scale .sc-green{color:var(--primary)}
 .thermo-scale .sc-yellow{color:#FFFFFF}
@@ -579,7 +579,7 @@ form{padding:20px 24px}
 .cat-actions{position:absolute;top:8px;right:8px;display:flex;gap:2px;opacity:0;transition:opacity .15s}
 
 /* ── INVOICE DOC ─────────────────────────────────── */
-.inv-doc{font-family:'Inter',sans-serif;background:#fff;padding:40px;max-width:720px;margin:0 auto;color:#1e293b}
+.inv-doc{font-family:'Poppins',sans-serif;background:#fff;padding:40px;max-width:720px;margin:0 auto;color:#1e293b}
 .inv-doc-top{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;border-bottom:2px solid #e2e8f0;margin-bottom:24px}
 .inv-doc-brand{font-size:20px;font-weight:900;color:#C6A15E}
 .inv-doc-brand small{display:block;font-size:11px;color:#64748b;font-weight:400;margin-top:2px}
@@ -616,7 +616,7 @@ form{padding:20px 24px}
 .doc-template-icon{width:48px;height:48px;border-radius:12px;background:var(--primary-l);display:flex;align-items:center;justify-content:center;margin-bottom:14px}
 .doc-template-title{font-size:15px;font-weight:700;margin-bottom:6px}
 .doc-template-desc{font-size:12.5px;color:var(--text2);line-height:1.5}
-.recibo-doc{font-family:'Inter',sans-serif;background:#fff;padding:40px;max-width:680px;margin:0 auto;color:#1e293b}
+.recibo-doc{font-family:'Poppins',sans-serif;background:#fff;padding:40px;max-width:680px;margin:0 auto;color:#1e293b}
 .recibo-header{text-align:center;padding-bottom:20px;border-bottom:2px solid #e2e8f0;margin-bottom:24px}
 .recibo-header h2{font-size:20px;font-weight:900;margin-bottom:4px}
 .recibo-header p{font-size:12px;color:#64748b}
@@ -2626,6 +2626,8 @@ async function renderContaPrincipal(){
   if(thermoPct>=60){thermoStatus='Saudável';thermoColor='var(--green)';}
   else if(thermoPct>=35){thermoStatus='Atenção';thermoColor='#E8E8E8';}
   else{thermoStatus='Crítico';thermoColor='var(--red)';}
+  const thermoSegsC=['#C6A15E','#D0B074','#DBC08D','#E6D2AC','#F4EAD6','#FFFFFF','#DDDDE0','#B9B9BE','#97979C','#75757B','#5A5A60'];
+  const ptrColor=thermoSegsC[Math.max(0,Math.min(10,Math.floor((100-thermoPct)/100*11)))];
   // Calendar
   const today=new Date();
   const isCurMonth=today.getFullYear()===curYear&&today.getMonth()+1===curMonth;
@@ -2655,9 +2657,8 @@ async function renderContaPrincipal(){
     <div class="thermometer-wrap">
       <div class="thermo-header"><span>Termômetro Financeiro</span><span class="thermo-status" style="color:${thermoColor}">${thermoStatus}</span></div>
       <div class="thermo-bar-wrap">
-        <svg class="thermo-pointer-svg" style="left:${100-thermoPct}%" viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg">
-          <rect x="6" y="0" width="10" height="9" fill="#5fa1f0" rx="1.5"/>
-          <polygon points="11,26 1,9 21,9" fill="#3d7fd0"/>
+        <svg class="thermo-pointer-svg" style="left:${100-thermoPct}%" viewBox="0 0 14 8" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="7,8 0.5,0.5 13.5,0.5" fill="${ptrColor}"/>
         </svg>
         <div class="thermo-segments">
           <div class="thermo-segment" style="background:#C6A15E"></div>
@@ -2845,7 +2846,7 @@ async function renderReceber(){
       <td class="ed" data-f="description" data-id="${t.id}" data-t="text" data-v="${esc(t.description)}"><strong>${esc(t.description)}</strong></td>
       <td class="ed cell-amount pos" data-f="amount" data-id="${t.id}" data-t="currency" data-v="${maskFromNumber(t.amount)}">${fmt(t.amount)}</td>
       <td class="ed" data-f="recebidoDe" data-id="${t.id}" data-t="text" data-v="${esc(t.recebidoDe||'')}">${esc(t.recebidoDe||'—')}</td>
-      <td class="ed" data-f="categoryId" data-id="${t.id}" data-t="select" data-v="${t.categoryId||''}"><span class="cell-cat" style="background:${color}15;color:${color}">${catIcon(cat?.icon)} ${cat?esc(cat.name):'—'}</span></td>
+      <td class="ed" data-f="categoryId" data-id="${t.id}" data-t="select" data-v="${t.categoryId||''}"><span class="cell-cat" style="background:var(--primary-l);color:var(--primary)">${catIcon(cat?.icon)} ${cat?esc(cat.name):'—'}</span></td>
       <td class="ed" data-f="tipoRecebimento" data-id="${t.id}" data-t="select" data-v="${t.tipoRecebimento||''}">${getTiposRecebimento()[t.tipoRecebimento]||'—'}</td>
       <td class="ed" data-f="paymentMethod" data-id="${t.id}" data-t="select" data-v="${t.paymentMethod||''}">${getPayModes()[t.paymentMethod]||'—'}</td>
       <td>${payToggle(t.id,paid)}</td>
@@ -3034,7 +3035,7 @@ async function renderPagar(){
       <td class="ed" data-f="description" data-id="${t.id}" data-t="text" data-v="${esc(t.description)}"><strong>${esc(t.description)}</strong></td>
       <td class="ed cell-amount neg" data-f="amount" data-id="${t.id}" data-t="currency" data-v="${maskFromNumber(t.amount)}">${fmt(t.amount)}</td>
       <td class="ed" data-f="pagoA" data-id="${t.id}" data-t="text" data-v="${esc(t.pagoA||'')}">${esc(t.pagoA||'—')}</td>
-      <td class="ed" data-f="categoryId" data-id="${t.id}" data-t="select" data-v="${t.categoryId||''}"><span class="cell-cat" style="background:${color}15;color:${color}">${catIcon(cat?.icon)} ${cat?esc(cat.name):'—'}</span></td>
+      <td class="ed" data-f="categoryId" data-id="${t.id}" data-t="select" data-v="${t.categoryId||''}"><span class="cell-cat" style="background:var(--primary-l);color:var(--primary)">${catIcon(cat?.icon)} ${cat?esc(cat.name):'—'}</span></td>
       <td class="ed" data-f="tipoDespesa" data-id="${t.id}" data-t="select" data-v="${t.tipoDespesa||''}">${t.tipoDespesa?`<span class="badge ${tipoCls}">${t.tipoDespesa==='fixa'?'Fixa':'Variável'}</span>`:'—'}</td>
       <td class="ed" data-f="tipoPagamento" data-id="${t.id}" data-t="select" data-v="${t.tipoPagamento||''}">${getTiposPagamento()[t.tipoPagamento]||'—'}</td>
       <td class="ed" data-f="paymentMethod" data-id="${t.id}" data-t="select" data-v="${t.paymentMethod||''}">${getPayModes()[t.paymentMethod]||'—'}</td>
@@ -3090,7 +3091,7 @@ async function renderLancamentos(){
     const sc={paid:'badge-paid',pending:'badge-pending',overdue:'badge-overdue'}[t.status];
     return`<tr>
       <td>${fmtDate(t.date)}</td>
-      <td><span class="cell-cat" style="background:${color}15;color:${color}">${catIcon(cat?.icon)} ${cat?esc(cat.name):'—'}</span></td>
+      <td><span class="cell-cat" style="background:var(--primary-l);color:var(--primary)">${catIcon(cat?.icon)} ${cat?esc(cat.name):'—'}</span></td>
       <td>${esc(t.description)}</td>
       <td>${getPayModes()[t.paymentMethod]||'—'}</td>
       <td class="cell-amount ${t.type==='income'?'pos':'neg'}">${t.type==='income'?'+':'-'} ${fmt(t.amount)}</td>
@@ -3123,7 +3124,7 @@ function accountsHTML(accts,isMain,mainRealizado){
   // Conta principal: saldo exibido = abertura (campo balance) + realizado acumulado dos lançamentos pagos
   const shown=(a.isMain&&typeof mainRealizado==='number')?((parseFloat(a.balance)||0)+mainRealizado):(parseFloat(a.balance)||0);
   return `<div class="account-card ${a.isMain?'is-main':''}">
-    <span class="acc-icon" style="background:${a.color}18;color:${a.color}">${catIcon(a.icon)}</span>
+    <span class="acc-icon" style="background:var(--primary-l);color:var(--primary)">${catIcon(a.icon)}</span>
     <div class="acc-info">
       <div class="acc-name">${esc(a.name)}${a.isMain?'<span class="acc-main-badge">PRINCIPAL</span>':''}</div>
       <div class="acc-balance ${shown>=0?'pos':'neg'}">${fmt(shown)}</div>
@@ -3213,7 +3214,7 @@ async function openSaldoModal(id){
           <div style="font-size:24px;font-weight:800;color:${(parseFloat(acc.balance)||0)>=0?'var(--green)':'var(--red)'}">${fmt(acc.balance||0)}</div>
           <div style="font-size:11px;color:var(--text3)">${isMain?'Saldo de abertura (o painel mostra abertura + lançamentos pagos)':'Saldo atual'}</div>
         </div>
-        <span class="acc-icon" style="background:${acc.color}18;color:${acc.color};width:48px;height:48px;flex-shrink:0">${catIcon(acc.icon)}</span>
+        <span class="acc-icon" style="background:var(--primary-l);color:var(--primary);width:48px;height:48px;flex-shrink:0">${catIcon(acc.icon)}</span>
       </div>
       <div class="two-col">
         <div class="form-group"><label>Valor (R$)</label><input type="text" inputmode="decimal" id="saldo-amount" placeholder="0,00"></div>
@@ -3614,7 +3615,7 @@ async function renderCategorias(){
 function catGroupHTML(cats){
   if(!cats.length)return'<p class="empty-state">Nenhuma categoria.</p>';
   return cats.map(c=>`<div class="cat-card">
-    <span class="cat-icon-big" style="background:${c.color}15;color:${c.color}">${catIcon(c.icon)}</span>
+    <span class="cat-icon-big" style="background:var(--primary-l);color:var(--primary)">${catIcon(c.icon)}</span>
     <span style="font-size:13px;font-weight:600">${esc(c.name)}</span>
     <div class="cat-actions">
       <button class="btn-icon" onclick="FC.editCat('${c.id}')">${I.edit}</button>
@@ -4214,7 +4215,7 @@ function printHTML(html,title){
   if(!w){alert('Permita pop-ups para imprimir.');return;}
   const styles=document.querySelector('style').textContent;
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${esc(title)}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>${styles}body{background:#fff;display:block;height:auto;overflow:visible}@media print{body{margin:0}}</style>
   </head><body>${html}</body></html>`);
   w.document.close();
