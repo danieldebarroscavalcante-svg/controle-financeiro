@@ -18,17 +18,20 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --primary:#c95007;--primary-d:#a84006;--primary-l:#FEE8D6;--primary-xl:#FFF4EE;
-  --sidebar:#383838;--sidebar-hover:#4a4a4a;
-  --page-bg:#f9f8f5;
-  --bg:#F2F2F2;--card:#FFFFFF;--border:#E2E8F0;--border2:#CBD5E1;
-  --text:#1E293B;--text2:#475569;--text3:#94A3B8;
-  --green:#10B981;--green-l:#D1FAE5;--red:#EF4444;--red-l:#FEE2E2;
-  --yellow:#F59E0B;--yellow-l:#FEF3C7;--blue:#3B82F6;
+  color-scheme:dark;
+  /* C6 Bank — escuro + dourado (Carbon) */
+  --primary:#C6A15E;--primary-d:#A9853F;--primary-l:rgba(198,161,94,.20);--primary-xl:rgba(198,161,94,.10);
+  --gold:#C6A15E;
+  --sidebar:#000000;--sidebar-hover:#1A1A1A;
+  --page-bg:#0E0E10;
+  --bg:#262629;--card:#191919;--border:#2C2C2F;--border2:#3B3B3F;
+  --text:#F3F3F3;--text2:#B2B2B7;--text3:#83838A;
+  --green:#22C58A;--green-l:rgba(34,197,138,.16);--red:#F0524B;--red-l:rgba(240,82,75,.16);
+  --yellow:#F5A623;--yellow-l:rgba(245,166,35,.16);--blue:#4F90F7;
   --radius:12px;--radius-sm:8px;
-  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
-  --shadow-md:0 4px 12px rgba(0,0,0,.08);
-  --shadow-lg:0 10px 30px rgba(0,0,0,.15);
+  --shadow:0 1px 3px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 4px 14px rgba(0,0,0,.5);
+  --shadow-lg:0 12px 34px rgba(0,0,0,.6);
 }
 body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--page-bg);color:var(--text);font-size:14px;min-height:100vh}
 .main{background:var(--page-bg)}
