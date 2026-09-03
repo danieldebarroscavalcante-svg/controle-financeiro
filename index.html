@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.19.3">
+<meta name="version" content="2026.06.19.4">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -285,9 +285,9 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .pat-card.total .pat-add:hover{background:rgba(255,255,255,.28)}
 .pat-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
 .pat-card.saldo{border-left-color:var(--primary)}
-.pat-card.previsao{border-left-color:var(--blue)}
+.pat-card.previsao{border-left-color:var(--primary)}
 .pat-card.poupanca{border-left-color:var(--green)}
-.pat-card.invest{border-left-color:#7C3AED}
+.pat-card.invest{border-left-color:var(--primary)}
 .pat-card.total{border-left-color:var(--gold);background:linear-gradient(135deg,#242424 0%,#0d0d0d 100%);color:#fff;border:1px solid #333}
 .pat-card.total .pat-label{color:rgba(255,255,255,.7)}
 .pat-card.total .pat-value{color:var(--gold)!important}
@@ -314,9 +314,9 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .thermo-segment::after{content:'';position:absolute;top:0;left:0;right:0;height:50%;background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0))}
 .thermo-pointer-svg{position:absolute;top:-22px;width:22px;height:26px;transform:translateX(-50%);transition:left .7s cubic-bezier(.25,.46,.45,.94);z-index:3;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
 .thermo-scale{display:flex;justify-content:space-between;font-size:9.5px;color:var(--text3);margin-top:6px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
-.thermo-scale .sc-green{color:#0d8c2c}
-.thermo-scale .sc-yellow{color:#d4a017}
-.thermo-scale .sc-red{color:#b41410}
+.thermo-scale .sc-green{color:var(--primary)}
+.thermo-scale .sc-yellow{color:#FFFFFF}
+.thermo-scale .sc-red{color:var(--red)}
 
 /* ── CONTAS / CENTROS DE CUSTO ───────────────────── */
 .accounts-section{margin-bottom:28px}
