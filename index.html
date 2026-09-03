@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.06.19.1">
+<meta name="version" content="2026.06.19.2">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -26,7 +26,7 @@
   --page-bg:#0E0E10;
   --bg:#262629;--card:#191919;--border:#2C2C2F;--border2:#3B3B3F;
   --text:#F3F3F3;--text2:#B2B2B7;--text3:#83838A;
-  --green:#22C58A;--green-l:rgba(34,197,138,.16);--red:#F0524B;--red-l:rgba(240,82,75,.16);
+  --green:#C6A15E;--green-l:rgba(198,161,94,.18);--red:#8E8E95;--red-l:rgba(142,142,149,.16);
   --yellow:#F5A623;--yellow-l:rgba(245,166,35,.16);--blue:#4F90F7;
   --radius:12px;--radius-sm:8px;
   --shadow:0 1px 3px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
@@ -603,7 +603,7 @@ form{padding:20px 24px}
 .inv-totals{display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-bottom:24px}
 .inv-totals-row{display:flex;gap:48px;font-size:12.5px;min-width:240px;justify-content:space-between}
 .inv-totals-row span:first-child{color:#64748b}
-.inv-grand-total{display:flex;justify-content:space-between;font-size:17px;font-weight:900;padding-top:12px;border-top:2px solid #1e293b;min-width:240px;color:#10b981;gap:48px}
+.inv-grand-total{display:flex;justify-content:space-between;font-size:17px;font-weight:900;padding-top:12px;border-top:2px solid #1e293b;min-width:240px;color:#C6A15E;gap:48px}
 .inv-grand-label{color:#1e293b}
 .inv-pay-info{background:#FAF6EA;border-left:4px solid #C6A15E;border-radius:8px;padding:14px;font-size:11.5px;color:#475569;line-height:1.6}
 .item-row{display:grid;grid-template-columns:1fr 70px 130px 110px 36px;gap:8px;align-items:center;margin-bottom:8px}
@@ -621,9 +621,9 @@ form{padding:20px 24px}
 .recibo-header{text-align:center;padding-bottom:20px;border-bottom:2px solid #e2e8f0;margin-bottom:24px}
 .recibo-header h2{font-size:20px;font-weight:900;margin-bottom:4px}
 .recibo-header p{font-size:12px;color:#64748b}
-.recibo-valor{text-align:center;background:#f0fdf4;border-radius:12px;padding:20px;margin-bottom:24px;border:2px dashed #10b981}
+.recibo-valor{text-align:center;background:#FAF6EA;border-radius:12px;padding:20px;margin-bottom:24px;border:2px dashed #C6A15E}
 .recibo-valor .label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.recibo-valor .amount{font-size:28px;font-weight:900;color:#10b981}
+.recibo-valor .amount{font-size:28px;font-weight:900;color:#C6A15E}
 .recibo-body{font-size:13px;line-height:1.9;margin-bottom:24px}
 .recibo-field{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid #e2e8f0}
 .recibo-field-label{color:#64748b;min-width:130px;flex-shrink:0;font-weight:600}
@@ -2586,8 +2586,8 @@ async function renderPrevisto(){
         <div class="amounts-line"><span class="lbl">Previsto</span><span class="val">${fmt(expTotal)}</span></div>
       </div>
     </div>`;
-  drawDonut('d-rec-donut',incPaid,incTotal,'#10B981');
-  drawDonut('d-pag-donut',expPaid,expTotal,'#EF4444');
+  drawDonut('d-rec-donut',incPaid,incTotal,'#C6A15E');
+  drawDonut('d-pag-donut',expPaid,expTotal,'#8E8E95');
 }
 
 function drawDonut(id,paid,total,color){
@@ -2693,8 +2693,8 @@ async function renderFluxoCaixa(){
   const ctx=document.getElementById('fluxo-chart').getContext('2d');
   charts['fluxo-chart']=new Chart(ctx,{
     data:{labels:months.map(m=>m.label),datasets:[
-      {type:'bar',label:'Receitas',data:incs,backgroundColor:'#10B981',borderRadius:6,stack:'s'},
-      {type:'bar',label:'Despesas',data:exps,backgroundColor:'#EF4444',borderRadius:6,stack:'s'},
+      {type:'bar',label:'Receitas',data:incs,backgroundColor:'#C6A15E',borderRadius:6,stack:'s'},
+      {type:'bar',label:'Despesas',data:exps,backgroundColor:'#8E8E95',borderRadius:6,stack:'s'},
       {type:'line',label:'Saldo',data:bals,borderColor:'#C6A15E',backgroundColor:'transparent',borderWidth:2.5,tension:.3,pointBackgroundColor:'#c95007',pointRadius:4}
     ]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#B2B2B7',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(Math.abs(c.parsed.y))}`}}},scales:{x:{grid:{display:false},ticks:{color:'#83838A',font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.07)'},ticks:{color:'#83838A',font:{size:10},callback:v=>'R$ '+v.toLocaleString('pt-BR')}}}}
