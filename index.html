@@ -49,7 +49,7 @@ body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--page-b
 .main .icon-mute{color:var(--text3)}
 
 /* ── LOGIN SCREEN ────────────────────────────────── */
-#login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#383838 0%,#1a1a1a 100%);display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px}
+#login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#1a1a1a 0%,#000 100%);display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px}
 .login-card{background:var(--card);padding:40px 40px 36px;border-radius:18px;width:380px;max-width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center}
 .login-brand{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px}
 .login-brand svg{width:22px;height:22px;color:var(--primary);stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
@@ -115,7 +115,7 @@ body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--page-b
 .icon-btn{background:none;border:none;width:38px;height:38px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;position:relative;color:var(--text2)}
 .icon-btn:hover{background:var(--bg)}
 .icon-btn .icon{color:var(--primary)}
-.notif-badge{position:absolute;top:5px;right:5px;background:var(--red);color:#fff;font-size:9px;font-weight:800;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+.notif-badge{position:absolute;top:5px;right:5px;background:var(--red);color:#fff;font-size:9px;font-weight:800;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--card)}
 .notif-badge.zero{display:none}
 .dropdown{position:absolute;top:calc(100% + 4px);right:0;background:var(--card);border-radius:12px;box-shadow:var(--shadow-lg);min-width:280px;max-width:380px;z-index:50;border:1px solid var(--border);max-height:480px;overflow:hidden;display:flex;flex-direction:column;visibility:hidden;opacity:0;pointer-events:none;transform:translateY(-6px);transition:opacity .15s,visibility .15s,transform .15s}
 .dropdown-wrap:hover .dropdown{visibility:visible;opacity:1;pointer-events:auto;transform:translateY(0)}
@@ -289,9 +289,9 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .pat-card.previsao{border-left-color:var(--blue)}
 .pat-card.poupanca{border-left-color:var(--green)}
 .pat-card.invest{border-left-color:#7C3AED}
-.pat-card.total{border-left-color:var(--text);background:linear-gradient(135deg,var(--text) 0%,#1a1a1a 100%);color:#fff}
+.pat-card.total{border-left-color:var(--gold);background:linear-gradient(135deg,#242424 0%,#0d0d0d 100%);color:#fff;border:1px solid #333}
 .pat-card.total .pat-label{color:rgba(255,255,255,.7)}
-.pat-card.total .pat-value{color:#fff!important}
+.pat-card.total .pat-value{color:var(--gold)!important}
 .pat-icon-circle{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--primary-xl);color:var(--primary)}
 .pat-icon-circle svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .pat-card.previsao .pat-icon-circle{background:#dbeafe;color:var(--blue)}
@@ -308,7 +308,7 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .thermometer-wrap{margin:18px 0 14px}
 .thermo-header{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text2);margin-bottom:6px}
 .thermo-status{font-weight:800;font-size:11.5px}
-.thermo-bar-wrap{background:#fff;border:1px solid #e2e8f0;border-radius:7px;padding:3px;position:relative;margin-top:26px}
+.thermo-bar-wrap{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:3px;position:relative;margin-top:26px}
 .thermo-segments{display:flex;height:24px;border-radius:4px;overflow:hidden;position:relative}
 .thermo-segment{flex:1;border-right:1px solid rgba(0,0,0,.14);position:relative}
 .thermo-segment:last-child{border-right:none}
@@ -327,7 +327,7 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 @media(min-width:768px){#acc-main,#acc-savings,#acc-investment{grid-template-columns:repeat(auto-fill,minmax(390px,1fr))}}
 .account-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:18px;display:flex;align-items:center;gap:14px;position:relative;transition:box-shadow .15s;cursor:default}
 .account-card:hover{box-shadow:var(--shadow-md)}
-.account-card.is-main{border-color:var(--primary);background:linear-gradient(135deg,#fff 0%,var(--primary-xl) 100%)}
+.account-card.is-main{border-color:var(--primary);background:linear-gradient(135deg,var(--card) 0%,var(--primary-xl) 100%)}
 .acc-icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .acc-icon svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .acc-info{flex:1;min-width:0}
@@ -380,7 +380,7 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .badge-overdue{background:var(--red-l);color:var(--red)}
 .badge-fixa{background:#E0E7FF;color:#4338CA}
 .badge-variavel{background:#FEF3C7;color:#92400E}
-.badge-draft{background:#F2F2F2;color:#64748B}
+.badge-draft{background:var(--bg);color:var(--text3)}
 .badge-sent{background:#DBEAFE;color:#1D4ED8}
 .badge-inv-paid{background:var(--green-l);color:var(--green)}
 .badge-inv-over{background:var(--red-l);color:var(--red)}
@@ -416,14 +416,14 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .chk-cell{width:38px;text-align:center;padding-left:10px!important;padding-right:6px!important}
 .row-chk,.chk-all{width:16px;height:16px;accent-color:var(--primary);cursor:pointer;margin:0;vertical-align:middle}
 .data-table tbody tr.row-selected td{background:var(--primary-xl)!important}
-.bulk-bar{display:none;align-items:center;gap:14px;background:var(--primary);color:#fff;border-radius:10px;padding:10px 16px;margin-bottom:14px;box-shadow:var(--shadow-md);animation:fadeIn .15s}
+.bulk-bar{display:none;align-items:center;gap:14px;background:var(--primary);color:#151510;border-radius:10px;padding:10px 16px;margin-bottom:14px;box-shadow:var(--shadow-md);animation:fadeIn .15s}
 .bulk-bar.show{display:flex}
 .bulk-bar .bulk-count{font-size:13.5px;font-weight:700}
 .bulk-bar .bulk-spacer{flex:1}
 .bulk-bar button{border:none;border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
-.bulk-bar .bulk-del{background:#fff;color:var(--red)}
+.bulk-bar .bulk-del{background:#151510;color:#fff}
 .bulk-bar .bulk-del:hover{background:var(--red-l)}
-.bulk-bar .bulk-clear{background:rgba(255,255,255,.18);color:#fff}
+.bulk-bar .bulk-clear{background:rgba(0,0,0,.2);color:#151510}
 .bulk-bar .bulk-clear:hover{background:rgba(255,255,255,.3)}
 .bulk-bar svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 /* célula editável inline */
@@ -894,7 +894,7 @@ form{padding:20px 24px}
     </div>
     <div class="topbar-actions">
       <button type="button" class="btn primary" id="btn-new-tx" onclick="window.__fcOpenTx&&window.__fcOpenTx()">
-        <svg class="icon" style="width:14px;height:14px;color:#fff;pointer-events:none" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <svg class="icon" style="width:14px;height:14px;color:#151510;pointer-events:none" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         <span class="tx-label" style="pointer-events:none">Novo Lançamento</span>
       </button>
       <div class="dropdown-wrap">
@@ -2604,7 +2604,7 @@ function drawDonut(id,paid,total,color){
   const data=total>0?[paid,rem]:[1,0];
   charts[id]=new Chart(ctx.getContext('2d'),{
     type:'doughnut',
-    data:{datasets:[{data,backgroundColor:[color,'#F2F2F2'],borderWidth:0}]},
+    data:{datasets:[{data,backgroundColor:[color,'#2C2C2F'],borderWidth:0}]},
     options:{responsive:true,maintainAspectRatio:true,cutout:'78%',plugins:{legend:{display:false},tooltip:{enabled:false}}}
   });
 }
@@ -2704,7 +2704,7 @@ async function renderFluxoCaixa(){
       {type:'bar',label:'Despesas',data:exps,backgroundColor:'#EF4444',borderRadius:6,stack:'s'},
       {type:'line',label:'Saldo',data:bals,borderColor:'#c95007',backgroundColor:'transparent',borderWidth:2.5,tension:.3,pointBackgroundColor:'#c95007',pointRadius:4}
     ]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#475569',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(Math.abs(c.parsed.y))}`}}},scales:{x:{grid:{display:false},ticks:{color:'#94A3B8',font:{size:10}}},y:{grid:{color:'#F2F2F2'},ticks:{color:'#94A3B8',font:{size:10},callback:v=>'R$ '+v.toLocaleString('pt-BR')}}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#B2B2B7',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(Math.abs(c.parsed.y))}`}}},scales:{x:{grid:{display:false},ticks:{color:'#83838A',font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.07)'},ticks:{color:'#83838A',font:{size:10},callback:v=>'R$ '+v.toLocaleString('pt-BR')}}}}
   });
 }
 
