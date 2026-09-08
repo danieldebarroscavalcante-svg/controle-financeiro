@@ -3745,7 +3745,10 @@ function parseInvoiceLines(lines){
   const reMonth=/^(\d{1,2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)(?:\s+\d{2,4})?\s+(.+?)\s+(?:R\$\s*)?(-?[\d.]+,\d{2})\s*$/i;
   const reISO=/^(\d{4})-(\d{2})-(\d{2})\s+(.+?)\s+(?:R\$\s*)?(-?[\d.]+,\d{2})\s*$/;
   const reSkipKeywords=/pagamento|total|saldo anterior|pagamentos efetuados|encargo|mensalidade do cart|juros|iof|multa|estorno do pagamento/i;
-  for(const ln of lines){
+  const reAnyMoney=/-?[\d.]+,\d{2}/;
+  const isTxLine=ln=>reBR.test(ln)||reMonth.test(ln)||reISO.test(ln);
+  for(let i=0;i<lines.length;i++){
+    const ln=lines[i];
     if(reSkipKeywords.test(ln))continue;
     let m=ln.match(reBR);
     let day,month,desc,valStr;
@@ -3762,7 +3765,16 @@ function parseInvoiceLines(lines){
     const parcMatch=desc.match(/(\d{1,2})\/(\d{1,2})\b/);
     let instCur=null,instTot=null;
     if(parcMatch){instCur=parseInt(parcMatch[1]);instTot=parseInt(parcMatch[2]);if(instTot<instCur||instTot>360){instCur=null;instTot=null;}}
-    items.push({day,month,description:desc.trim().replace(/\s+/g,' '),amount,installmentNumber:instCur,installmentTotal:instTot,enabled:true});
+    // Muitas faturas (ex: Itaú) trazem, na linha logo abaixo da compra, a
+    // categoria e a cidade separadas por um ponto — ex: "VESTUÁRIO . SÃO PAULO".
+    // Usa o que vem ANTES do ponto como sugestão de categoria.
+    let categoryHint='';
+    const nextLn=lines[i+1];
+    if(nextLn&&!reSkipKeywords.test(nextLn)&&!isTxLine(nextLn)&&nextLn.length<=60&&!reAnyMoney.test(nextLn)){
+      const dotIdx=nextLn.indexOf('.');
+      categoryHint=(dotIdx>=0?nextLn.slice(0,dotIdx):nextLn).trim();
+    }
+    items.push({day,month,description:desc.trim().replace(/\s+/g,' '),amount,installmentNumber:instCur,installmentTotal:instTot,enabled:true,categoryHint});
   }
   return items;
 }
@@ -3823,18 +3835,23 @@ async function processCcPdf(file,card){
   }
 }
 
-// Tenta achar uma categoria já cadastrada cujo nome apareça na descrição da compra.
-// Simples e honesto: não é IA, é um match de texto — o usuário sempre pode trocar no dropdown.
-function guessCategoryId(desc,cats){
-  const d=(desc||'').toLowerCase();
-  for(const c of cats){if(c.name&&d.includes(c.name.toLowerCase()))return c.id;}
+function stripAccents(s){return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'');}
+// Tenta achar uma categoria já cadastrada cujo nome apareça no texto informado
+// (prioriza a dica de categoria extraída da própria fatura — texto antes do
+// ponto na linha abaixo da compra, ex: "VESTUÁRIO . SÃO PAULO" -> "VESTUÁRIO" —
+// e cai para a descrição da compra se não achar). Simples e honesto: não é IA,
+// é um match de texto sem acento/maiúsculas — o usuário sempre pode trocar no dropdown.
+function guessCategoryId(text,cats){
+  const d=stripAccents(text).toLowerCase();
+  if(!d)return'';
+  for(const c of cats){if(c.name&&d.includes(stripAccents(c.name).toLowerCase()))return c.id;}
   return '';
 }
 
 async function renderCcParseResult(card){
   const items=_pendingCcItems;
   const cats=(await dbGetAll('categories')).filter(c=>c.type==='expense');
-  for(const it of items){if(it.categoryId===undefined)it.categoryId=guessCategoryId(it.description,cats);}
+  for(const it of items){if(it.categoryId===undefined)it.categoryId=guessCategoryId(it.categoryHint,cats)||guessCategoryId(it.description,cats);}
   const total=items.filter(it=>it.enabled).reduce((s,it)=>s+it.amount*(it.installmentTotal||1),0);
   const totalThisMonth=items.filter(it=>it.enabled).reduce((s,it)=>s+it.amount,0);
   const catOptsFor=selId=>`<option value="">Sem categoria</option>`+cats.map(c=>`<option value="${c.id}" ${c.id===selId?'selected':''}>${esc(c.name)}</option>`).join('');
