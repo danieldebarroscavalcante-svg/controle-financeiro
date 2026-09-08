@@ -3955,6 +3955,7 @@ async function renderCcParseResult(card){
       </div>
       <button class="btn primary" id="btn-import-cc-items">✓ Importar fatura</button>
     </div>
+    <div id="cc-mismatch-warning"></div>
     <div style="font-size:11.5px;color:var(--text3);margin-bottom:10px">Vai virar <strong>1 despesa</strong> em Contas a Pagar por mês, no nome do cartão — os itens abaixo só alimentam os gráficos e a tabela do dashboard do cartão.</div>
     <div style="overflow-x:auto;max-height:380px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
       <table class="cc-invoice-tbl">
@@ -3995,6 +3996,19 @@ async function renderCcParseResult(card){
     });
   });
   document.getElementById('btn-import-cc-items').addEventListener('click',()=>importCcItems(card));
+  updateMismatchWarning();
+}
+
+// Compara a soma dos itens MARCADOS deste mês com o total que a própria fatura
+// declara (se conseguimos ler) e mostra um aviso quando divergem — sinal comum
+// de que alguma linha de outra seção (ex: prévia de faturas futuras) entrou
+// junto. Chamado sempre que o usuário marca/desmarca ou edita um item.
+function updateMismatchWarning(){
+  const el=document.getElementById('cc-mismatch-warning');
+  if(!el)return;
+  const totalThisMonth=_pendingCcItems.filter(it=>it.enabled).reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
+  const mismatch=_pendingCcStatedTotal!=null&&Math.abs(totalThisMonth-_pendingCcStatedTotal)>0.05;
+  el.innerHTML=mismatch?`<div style="background:var(--red-l);border:1px solid var(--red);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text)">⚠️ A fatura em PDF diz que o total é <strong>${fmt(_pendingCcStatedTotal)}</strong>, mas a soma dos itens marcados abaixo deu <strong>${fmt(totalThisMonth)}</strong>. Pode ter linha de outro mês/seção sendo lida por engano — revise a lista e desmarque o que não for deste mês antes de importar.</div>`:'';
 }
 
 function renderCcSummary(card){
@@ -4003,6 +4017,7 @@ function renderCcSummary(card){
   const totalFuture=items.filter(it=>it.enabled).reduce((s,it)=>s+(parseFloat(it.amount)||0)*((it.installmentTotal||1)),0);
   const summary=document.querySelector('#cc-parse-result > div > div:first-child');
   if(summary){summary.innerHTML=`<div style="font-size:13px;font-weight:700">Referência: <strong style="color:var(--primary)">${esc(_pendingCcRefMonth)}</strong></div><div style="font-size:11.5px;color:var(--text3);margin-top:2px">Total da fatura: <strong>${fmt(totalThisMonth)}</strong> · Compromisso futuro (parcelas): <strong>${fmt(totalFuture)}</strong></div>`;}
+  updateMismatchWarning();
 }
 
 async function importCcItems(card){
