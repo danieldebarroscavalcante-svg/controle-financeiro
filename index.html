@@ -3788,18 +3788,35 @@ async function readPdfText(file){
   const buf=await file.arrayBuffer();
   const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
   let lines=[];
+  // Agrupa os itens de uma coluna (já filtrados por X) em linhas por posição Y.
+  const buildColumnLines=items=>{
+    const byLine={};
+    items.forEach(it=>{const y=Math.round(it.transform[5]);if(!byLine[y])byLine[y]=[];byLine[y].push({x:it.transform[4],s:it.str});});
+    const sortedYs=Object.keys(byLine).map(Number).sort((a,b)=>b-a);
+    const out=[];
+    for(const y of sortedYs){
+      const ln=fixAccentSpacing(byLine[y].sort((a,b)=>a.x-b.x).map(p=>p.s).join(' ').replace(/\s+/g,' ').trim());
+      if(ln)out.push(ln);
+    }
+    return out;
+  };
   for(let i=1;i<=pdf.numPages;i++){
     const page=await pdf.getPage(i);
     const content=await page.getTextContent();
-    // Agrupa por linha (mesma posição Y)
-    const byLine={};
-    content.items.forEach(it=>{const y=Math.round(it.transform[5]);if(!byLine[y])byLine[y]=[];byLine[y].push({x:it.transform[4],s:it.str});});
-    const sortedYs=Object.keys(byLine).map(Number).sort((a,b)=>b-a);
-    for(const y of sortedYs){
-      const lineParts=byLine[y].sort((a,b)=>a.x-b.x).map(p=>p.s);
-      const ln=fixAccentSpacing(lineParts.join(' ').replace(/\s+/g,' ').trim());
-      if(ln)lines.push(ln);
-    }
+    // Muitas faturas (Itaú confirmado) imprimem DUAS colunas lado a lado por
+    // página, cada uma com sua própria lista de lançamentos independente (às
+    // vezes uma delas é literalmente "compras parceladas — próximas faturas").
+    // Se juntássemos tudo só pela posição Y (como antes), uma linha da coluna
+    // direita colava na linha correspondente da esquerda na mesma altura,
+    // misturando fatura atual com projeção futura numa bagunça só. Em vez
+    // disso, trata cada metade da página como uma coluna à parte, lida por
+    // inteiro de cima a baixo, preservando a ordem/adjacência dentro dela.
+    const xs=content.items.map(it=>it.transform[4]);
+    const midX=xs.length?(Math.min(...xs)+Math.max(...xs))/2:0;
+    const leftItems=content.items.filter(it=>it.transform[4]<midX);
+    const rightItems=content.items.filter(it=>it.transform[4]>=midX);
+    lines.push(...buildColumnLines(leftItems));
+    lines.push(...buildColumnLines(rightItems));
   }
   return lines;
 }
