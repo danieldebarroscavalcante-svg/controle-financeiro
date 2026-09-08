@@ -5015,6 +5015,8 @@ if(session){
   initFirebase().then(ok=>{if(ok)fbConnectAuthState();});
 }else{showLoginScreen();}
 
+window._ccTest={readPdfText,parseInvoiceLines,detectReferenceMonth,detectStatedTotal};
+
 })();
 </script>
 </body>
