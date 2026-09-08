@@ -2251,6 +2251,7 @@ async function syncCardSummaryTransactions(cardId){
   const existingSummaries=allTx.filter(t=>t.ccCardId===cardId&&t.isCcSummary);
   if(!allInvs.length){
     for(const t of existingSummaries)if(t.status!=='paid')await dbDelete('transactions',t.id);
+    await dbPut('creditcards',{...card,usedLimit:0});
     return;
   }
   let minYm=allInvs[0].referenceMonth,maxYm=allInvs[0].referenceMonth;
@@ -2277,13 +2278,15 @@ async function syncCardSummaryTransactions(cardId){
   const dueDay=card.dueDay||10;
   const last4=card.lastDigits?card.lastDigits.slice(-4):'';
   const label=`${card.name}${last4?' final '+last4:''}`;
-  let ym=minYm;
+  const curYm=fmtLocalDate(new Date()).slice(0,7);
+  let ym=minYm,usedLimit=0;
   while(ym<=maxYm){
     const{total,items}=computeCardMonth(ym,allInvs);
     const id=ccSummaryId(cardId,ym);
     const existing=await dbGet('transactions',id);
+    const stillOpen=!existing||existing.status!=='paid';
     if(total>0){
-      if(!existing||existing.status!=='paid'){
+      if(stillOpen){
         const[y,m]=ym.split('-').map(Number);
         const ds=addMonthsClampedStr(y,m,dueDay,0);
         await dbPut('transactions',{
@@ -2295,11 +2298,15 @@ async function syncCardSummaryTransactions(cardId){
           attachments:existing?(existing.attachments||[]):[]
         });
       }
+      // Limite usado = tudo que ainda está em aberto (mês atual + futuro), a partir de hoje.
+      // Meses já pagos ou anteriores ao mês atual não ocupam mais o limite.
+      if(ym>=curYm&&stillOpen)usedLimit+=total;
     } else if(existing&&existing.status!=='paid'){
       await dbDelete('transactions',id);
     }
     ym=ymAdd(ym,1);
   }
+  await dbPut('creditcards',{...card,usedLimit:Math.round(usedLimit*100)/100});
 }
 
 // id DETERMINÍSTICO por (recorrência, data): dois aparelhos geram o MESMO id,
@@ -4869,6 +4876,8 @@ if(session){
   startApp(session);
   initFirebase().then(ok=>{if(ok)fbConnectAuthState();});
 }else{showLoginScreen();}
+
+window._ccTest={setPending:(items,ref)=>{_pendingCcItems=items;_pendingCcRefMonth=ref;},importCcItems,syncCardSummaryTransactions,computeCardMonth,dbGetAll,dbGet};
 
 })();
 </script>
