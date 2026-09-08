@@ -3860,6 +3860,10 @@ const MESES_ABREV={jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,
 // "próxima fatura" — isso aparece em texto comum de boleto, ex: "encargos serão
 // cobrados na próxima fatura", e cortaria a leitura cedo demais por engano).
 const reFutureSection=/compras?\s+parceladas?\s*[-–—]?\s*pr[oó]ximas?\s+faturas?/i;
+// "Repasse de IOF em R$ X" — cobrança do IOF de compras internacionais, vem
+// numa linha própria (sem data), logo depois do(s) lançamento(s) em dólar.
+// Sem capturar isso, o total da fatura fica sempre um pouco menor que o real.
+const reIofRepasse=/repasse\s+de\s+iof\s+em\s+r\$\s*(-?[\d.]+,\d{2})/i;
 function parseInvoiceLines(lines){
   const items=[];
   const reBR=/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s+(.+?)\s+(?:R\$\s*)?(-?[\d.]+,\d{2})\s*$/;
@@ -3872,9 +3876,18 @@ function parseInvoiceLines(lines){
   const reSkipKeywords=/^(pagamento|total|saldo anterior|pagamentos efetuados|encargo|mensalidade do cart|juros|iof|multa por atraso|estorno do pagamento)/i;
   const reAnyMoney=/-?[\d.]+,\d{2}/;
   const isTxLine=ln=>reBR.test(ln)||reMonth.test(ln)||reISO.test(ln);
+  let lastDate=null; // usada pro "Repasse de IOF", que não tem data própria
   for(let i=0;i<lines.length;i++){
     const ln=lines[i];
     if(reFutureSection.test(ln))break; // a partir daqui é prévia de meses futuros, não a fatura atual
+    const iofMatch=ln.match(reIofRepasse);
+    if(iofMatch){
+      const v=parseFloat(iofMatch[1].replace(/\./g,'').replace(',','.'));
+      if(!isNaN(v)&&v!==0&&lastDate){
+        items.push({day:lastDate.day,month:lastDate.month,description:'IOF sobre compra internacional',amount:v,installmentNumber:null,installmentTotal:null,enabled:true,categoryHint:''});
+      }
+      continue;
+    }
     if(reSkipKeywords.test(ln))continue;
     let m=ln.match(reBR);
     let day,month,desc,valStr;
@@ -3904,6 +3917,7 @@ function parseInvoiceLines(lines){
       categoryHint=(dotIdx>=0?nextLn.slice(0,dotIdx):nextLn).trim();
     }
     items.push({day,month,description:desc.trim().replace(/\s+/g,' '),amount,installmentNumber:instCur,installmentTotal:instTot,enabled:true,categoryHint});
+    lastDate={day,month};
   }
   return items;
 }
@@ -5098,6 +5112,8 @@ if(session){
   startApp(session);
   initFirebase().then(ok=>{if(ok)fbConnectAuthState();});
 }else{showLoginScreen();}
+
+window._ccTest={readPdfText,parseInvoiceLines,detectStatedTotal};
 
 })();
 </script>
