@@ -3936,10 +3936,10 @@ async function saveTx(id,existing){
         await dbPut('transactions',txData);
       } else if(choice==='previous'){
         const all=await dbGetAll('transactions','recurrenceId',existing.recurrenceId);
-        for(const t of all)if(t.date<=existing.date)await dbPut('transactions',{...t,...baseData,id:t.id,date:t.date,status:t.status,attachments:t.attachments||[],recurrenceId:t.recurrenceId||null,installmentGroupId:t.installmentGroupId||null,installmentNumber:t.installmentNumber||null,installmentTotal:t.installmentTotal||null});
+        for(const t of all)if(t.date<=existing.date)await dbPut('transactions',{...t,...baseData,id:t.id,date:t.date,dueDate:calcRecurDueDate(baseData.date,baseData.dueDate,t.date),status:t.status,attachments:t.attachments||[],recurrenceId:t.recurrenceId||null,installmentGroupId:t.installmentGroupId||null,installmentNumber:t.installmentNumber||null,installmentTotal:t.installmentTotal||null});
       } else if(choice==='next'){
         const all=await dbGetAll('transactions','recurrenceId',existing.recurrenceId);
-        for(const t of all)if(t.date>=existing.date)await dbPut('transactions',{...t,...baseData,id:t.id,date:t.date,status:t.status,attachments:t.attachments||[],recurrenceId:t.recurrenceId||null,installmentGroupId:t.installmentGroupId||null,installmentNumber:t.installmentNumber||null,installmentTotal:t.installmentTotal||null});
+        for(const t of all)if(t.date>=existing.date)await dbPut('transactions',{...t,...baseData,id:t.id,date:t.date,dueDate:calcRecurDueDate(baseData.date,baseData.dueDate,t.date),status:t.status,attachments:t.attachments||[],recurrenceId:t.recurrenceId||null,installmentGroupId:t.installmentGroupId||null,installmentNumber:t.installmentNumber||null,installmentTotal:t.installmentTotal||null});
       }
     } else {
       await dbPut('transactions',txData);
