@@ -3374,8 +3374,13 @@ async function openCcModal(id){
           <option value="elo" ${card?.brand==='elo'?'selected':''}>Elo</option>
         </select>
       </div>
+      <div class="form-group"><label>Final do Cartão</label><input type="text" id="cc-last4" maxlength="4" inputmode="numeric" value="${esc(card?.lastDigits||'')}" placeholder="Ex: 6971"></div>
+      <div class="form-group"></div>
+    </div>
+    <div class="three-col">
       <div class="form-group"><label>Dia de Fechamento</label><input type="number" id="cc-closing" min="1" max="31" value="${card?.closingDay||''}" placeholder="Ex: 25"></div>
       <div class="form-group"><label>Dia de Vencimento</label><input type="number" id="cc-due" min="1" max="31" value="${card?.dueDay||''}" placeholder="Ex: 10"></div>
+      <div class="form-group"></div>
     </div>
     <div class="form-group">
       <label>Limite Total (R$)</label>
@@ -3400,6 +3405,7 @@ async function openCcModal(id){
       id:id||uid(),name,
       bank:document.getElementById('cc-bank').value.trim(),
       brand:document.getElementById('cc-brand').value,
+      lastDigits:document.getElementById('cc-last4').value.trim().replace(/\D/g,'').slice(-4),
       closingDay:parseInt(document.getElementById('cc-closing').value)||null,
       dueDay:parseInt(document.getElementById('cc-due').value)||null,
       totalLimit:parseCurrency(document.getElementById('cc-limit').value),
