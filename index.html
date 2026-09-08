@@ -1240,7 +1240,7 @@ async function tryAuth(){
   if(isRegisterMode){
     const p2=document.getElementById('login-pass2').value;
     if(p!==p2){errEl.textContent='As senhas não coincidem';errEl.classList.add('show');return;}
-    if(p.length<4){errEl.textContent='A senha deve ter no mínimo 4 caracteres';errEl.classList.add('show');return;}
+    if(p.length<8){errEl.textContent='A senha deve ter no mínimo 8 caracteres (ela também protege seus dados na nuvem)';errEl.classList.add('show');return;}
     const h=await hashPwd(p);
     localStorage.setItem(AUTH_KEY,JSON.stringify({user:u,hash:h,createdAt:new Date().toISOString()}));
     sessionStorage.setItem(SESSION_KEY,u);
@@ -1384,7 +1384,7 @@ async function openProfileModal(){
       <h3>🔑 Alterar Senha</h3>
       <p class="section-desc">Preencha somente se quiser alterar sua senha de acesso.</p>
       <div class="two-col">
-        <div class="form-group"><label>Nova Senha</label><input type="password" id="pf-newpwd" placeholder="Nova senha (mín. 4 caracteres)" maxlength="64"></div>
+        <div class="form-group"><label>Nova Senha</label><input type="password" id="pf-newpwd" placeholder="Nova senha (mín. 8 caracteres)" maxlength="64"></div>
         <div class="form-group"><label>Confirmar Nova Senha</label><input type="password" id="pf-newpwd2" placeholder="Repita a nova senha" maxlength="64"></div>
       </div>
     </div>
@@ -1399,11 +1399,27 @@ async function openProfileModal(){
     const newPwd=document.getElementById('pf-newpwd').value;
     const newPwd2=document.getElementById('pf-newpwd2').value;
     if(newPwd){
-      if(newPwd.length<4){alert('A nova senha deve ter no mínimo 4 caracteres.');return;}
+      if(newPwd.length<8){alert('A nova senha deve ter no mínimo 8 caracteres (ela também protege seus dados na nuvem).');return;}
       if(newPwd!==newPwd2){alert('As senhas não coincidem.');return;}
       const stored=JSON.parse(localStorage.getItem(AUTH_KEY)||'{}');
-      const h=await hashPwd(newPwd);
-      localStorage.setItem(AUTH_KEY,JSON.stringify({...stored,hash:h}));
+      const oldHash=stored.hash;
+      const newHash=await hashPwd(newPwd);
+      // Atualiza a senha no Firebase TAMBÉM (não só localmente) — senão a próxima tentativa
+      // de sincronizar na nuvem falha silenciosamente (a senha antiga continua lá) e a
+      // sincronização para de funcionar sem avisar o usuário.
+      if(isFirebaseReady()&&firebase.auth().currentUser&&oldHash){
+        try{
+          const safe=(stored.user||'').toLowerCase().replace(/[^a-z0-9]/g,'x').slice(0,30);
+          const email=`${safe}@fc.local`;
+          const cred=firebase.auth.EmailAuthProvider.credential(email,oldHash.slice(0,32));
+          await firebase.auth().currentUser.reauthenticateWithCredential(cred);
+          await firebase.auth().currentUser.updatePassword(newHash.slice(0,32));
+        }catch(err){
+          console.error('Falha ao atualizar senha na nuvem:',err);
+          alert('Sua senha local foi trocada, mas não foi possível atualizar a senha na nuvem agora (verifique sua internet e tente novamente). Até lá, a sincronização entre dispositivos pode parar de funcionar.');
+        }
+      }
+      localStorage.setItem(AUTH_KEY,JSON.stringify({...stored,hash:newHash}));
     }
     saveProfile({
       fullName:document.getElementById('pf-fullname').value.trim(),
@@ -1462,6 +1478,15 @@ async function initFirebase(){
   }catch(e){console.error('Firebase init:',e);return false;}
 }
 
+// Mostra o aviso de dessincronização de senha na nuvem no máximo uma vez por sessão
+// (evita repetir o alert a cada tentativa/retry automático).
+let _fcCloudMismatchWarned=false;
+function warnCloudAuthMismatch(){
+  if(_fcCloudMismatchWarned)return;
+  _fcCloudMismatchWarned=true;
+  setTimeout(()=>alert('⚠️ A sincronização com a nuvem está desconectada: sua conta na nuvem existe com uma senha diferente da atual (isso costuma acontecer depois de trocar ou resetar a senha sem internet).\n\nSeus dados NESTE aparelho continuam seguros. Para reconectar, vá em Configurações → Backup e Recuperação.'),300);
+}
+
 async function signInFirebase(username,pwdHash){
   if(!_fbDb)return false;
   const safe=username.toLowerCase().replace(/[^a-z0-9]/g,'x').slice(0,30);
@@ -1473,7 +1498,13 @@ async function signInFirebase(username,pwdHash){
   }catch(e){
     if(['auth/user-not-found','auth/invalid-credential','auth/invalid-login-credentials'].includes(e.code)){
       try{const c=await firebase.auth().createUserWithEmailAndPassword(email,pwd);_fbUser=c.user;return true;}
-      catch(e2){console.error('FB create:',e2);return false;}
+      catch(e2){
+        console.error('FB create:',e2);
+        // A conta já existe na nuvem, mas com senha diferente da atual: sem isso o app
+        // simplesmente desistia da sincronização sem avisar ninguém (bug corrigido em set/2026).
+        if(e2.code==='auth/email-already-in-use')warnCloudAuthMismatch();
+        return false;
+      }
     }
     console.error('FB signin:',e);return false;
   }
@@ -2484,7 +2515,6 @@ const WIDGET_DEFS={
 async function renderDashboard(){
   await renderPatrimony();
   const grid=document.getElementById('widgets-grid');
-  document.getElementById('dash-greeting').textContent.replace(/^[\w ]+/,'');
   // Build widget shells in order
   grid.innerHTML=widgetsOrder.map(id=>{
     const def=WIDGET_DEFS[id];if(!def)return'';
@@ -4549,7 +4579,7 @@ window.FC={
 // ══ START ═════════════════════════════════════════════════════════════
 document.getElementById('login-form').addEventListener('submit',e=>{e.preventDefault();tryAuth();});
 document.getElementById('login-forgot').addEventListener('click',()=>{
-  if(confirm('Como os dados ficam neste navegador, recuperar a senha exige resetar a conta.\n\nDeseja resetar agora? Você criará uma nova senha em seguida. Os lançamentos e dados financeiros NÃO serão apagados.')){
+  if(confirm('Como os dados ficam neste navegador, recuperar a senha exige resetar a conta.\n\nDeseja resetar agora? Você criará uma nova senha em seguida. Os lançamentos e dados financeiros NESTE APARELHO NÃO serão apagados.\n\n⚠️ Atenção: se você usa sincronização com a nuvem, ela vai parar de funcionar depois do reset (a conta na nuvem fica com a senha antiga). Você vai precisar reconectar em Configurações → Backup e Recuperação depois de criar a nova senha.')){
     localStorage.removeItem(AUTH_KEY);
     sessionStorage.removeItem(SESSION_KEY);
     localStorage.removeItem('fc_remember');
