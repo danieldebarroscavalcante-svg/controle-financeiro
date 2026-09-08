@@ -466,6 +466,31 @@ td.ed select.inline-editor{cursor:pointer}
 .cc-history-row{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--bg);border-radius:8px;margin-bottom:8px}
 .cc-history-row .h-info{font-size:13px}
 .cc-history-row .h-info small{display:block;color:var(--text3);font-size:11px;margin-top:2px}
+.cc-card{cursor:pointer;transition:transform .15s,box-shadow .15s,outline-color .15s;outline:2px solid transparent;outline-offset:2px}
+.cc-card.selected{outline-color:var(--primary)}
+
+/* ── DASHBOARD DO CARTÃO ─────────────────────────────── */
+.cc-dash-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:28px 0 18px;border-bottom:1px solid var(--border);padding-bottom:14px}
+.cc-dash-tab{padding:8px 16px;border-radius:20px;border:1.5px solid var(--border);background:var(--card);color:var(--text2);font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit}
+.cc-dash-tab:hover{border-color:var(--primary)}
+.cc-dash-tab.active{background:var(--primary);border-color:var(--primary);color:#151510}
+.cc-visual{width:280px;height:160px;border-radius:16px;position:relative;padding:18px 20px;color:#fff;overflow:hidden;flex:0 0 auto;box-shadow:var(--shadow-md);display:flex;flex-direction:column;justify-content:space-between}
+.cc-visual .cv-top{display:flex;justify-content:space-between;align-items:flex-start}
+.cc-visual .cv-bank{font-size:10px;text-transform:uppercase;letter-spacing:.1em;opacity:.7;font-weight:700}
+.cc-visual .cv-name{font-size:15px;font-weight:800;margin-top:2px}
+.cc-visual .cv-num{font-family:var(--mono,monospace);font-size:14px;letter-spacing:.12em;opacity:.85}
+.cc-visual .cv-foot{display:flex;justify-content:space-between;align-items:flex-end}
+.cc-visual .cv-flabel{font-size:8.5px;text-transform:uppercase;letter-spacing:.1em;opacity:.6}
+.cc-visual .cv-fval{font-size:13px;font-weight:700;margin-top:2px}
+.cc-dash-head{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:22px;align-items:stretch}
+.proj-table-wrap{overflow-x:auto;margin-top:16px;border-top:1px solid var(--border);padding-top:14px}
+.proj-table{width:100%;border-collapse:collapse;font-size:11.5px}
+.proj-table th,.proj-table td{padding:7px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border)}
+.proj-table th:first-child,.proj-table td:first-child{text-align:left;color:var(--text2);position:sticky;left:0;background:var(--card);padding-right:20px}
+.proj-table thead th{color:var(--text3);font-weight:700;text-transform:uppercase;font-size:9.5px;letter-spacing:.05em}
+.proj-table tbody td{color:var(--text2)}
+.proj-table tr.row-cumulative td{color:var(--primary);font-weight:700}
+.proj-table tbody tr:last-child td{border-bottom:none}
 
 /* ── FILTERS ─────────────────────────────────────── */
 .filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;align-items:center}
@@ -1096,12 +1121,13 @@ form{padding:20px 24px}
       <div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:4px">Importação Inteligente</div>
         <div style="font-size:22px;font-weight:800">Cartões de Crédito</div>
-        <div style="font-size:12.5px;color:var(--text2);margin-top:4px">Cadastre seus cartões e envie a fatura PDF — o sistema lê e cria automaticamente as despesas em <strong>Contas a Pagar</strong>, separando parcelas.</div>
+        <div style="font-size:12.5px;color:var(--text2);margin-top:4px">Cadastre seus cartões e envie a fatura PDF — o sistema lê, projeta as parcelas nos meses seguintes e mantém <strong>1 despesa por cartão/mês</strong> em Contas a Pagar, sempre atualizada quando uma fatura nova chega.</div>
       </div>
       <button class="btn primary" id="btn-new-cc">+ Novo Cartão</button>
     </div>
     <div id="cc-list"></div>
     <div id="cc-invoice-area"></div>
+    <div id="cc-dashboard"></div>
   </div>
 
   <!-- VIEW: VENCIMENTOS -->
@@ -3724,56 +3750,26 @@ function renderCcSummary(card){
 async function importCcItems(card){
   const items=_pendingCcItems.filter(it=>it.enabled&&it.description&&it.amount>0);
   if(!items.length){alert('Nenhum item selecionado.');return;}
-  // Encontra/cria categoria "Cartão de Crédito"
-  const cats=await dbGetAll('categories');
-  let cardCat=cats.find(c=>c.type==='expense'&&/cart(ã|a)o\s+de\s+cr(é|e)dito/i.test(c.name));
-  if(!cardCat){cardCat={id:uid(),name:'Cartão de Crédito',type:'expense',color:'#C6A15E',icon:'credit_card'};await dbPut('categories',cardCat);}
-  // Mês base: vencimento da fatura
-  const [refY,refM]=_pendingCcRefMonth.split('-').map(Number);
-  const dueDay=card.dueDay||10;
-  const invoiceId=uid();
-  let total=0,count=0;
-  for(const it of items){
-    if(it.installmentTotal&&it.installmentTotal>1){
-      // Parcelada: cria N parcelas a partir do mês de referência
-      const grpId=uid();
-      const remainingFromCurrent=it.installmentTotal-it.installmentNumber+1;
-      for(let i=0;i<remainingFromCurrent;i++){
-        const ds=addMonthsClampedStr(refY,refM,dueDay,i);
-        const parcNum=it.installmentNumber+i;
-        await dbPut('transactions',{
-          id:uid(),type:'expense',description:`${it.description}`,amount:parseFloat(it.amount),date:ds,dueDate:ds,
-          categoryId:cardCat.id,paymentMethod:'credit_card',status:'pending',
-          notes:`Cartão ${card.name} · fatura ref. ${_pendingCcRefMonth}`,
-          pagoA:card.name,tipoDespesa:'variavel',tipoPagamento:'fatura',
-          installmentGroupId:grpId,installmentNumber:parcNum,installmentTotal:it.installmentTotal,
-          ccCardId:card.id,ccInvoiceId:invoiceId,
-          attachments:[]
-        });
-      }
-      total+=parseFloat(it.amount)*remainingFromCurrent;count+=remainingFromCurrent;
-    } else {
-      // À vista: cria 1 despesa no mês da fatura
-      const ds=addMonthsClampedStr(refY,refM,dueDay,0);
-      await dbPut('transactions',{
-        id:uid(),type:'expense',description:it.description,amount:parseFloat(it.amount),date:ds,dueDate:ds,
-        categoryId:cardCat.id,paymentMethod:'credit_card',status:'pending',
-        notes:`Cartão ${card.name} · fatura ref. ${_pendingCcRefMonth}`,
-        pagoA:card.name,tipoDespesa:'variavel',tipoPagamento:'fatura',
-        ccCardId:card.id,ccInvoiceId:invoiceId,
-        attachments:[]
-      });
-      total+=parseFloat(it.amount);count+=1;
-    }
-  }
+  const cleanItems=items.map(it=>({
+    description:it.description,amount:parseFloat(it.amount),
+    installmentNumber:it.installmentTotal?it.installmentNumber:null,
+    installmentTotal:it.installmentTotal||null,
+    categoryId:it.categoryId||null
+  }));
+  const total=cleanItems.reduce((s,it)=>s+it.amount,0);
+  // Upsert por (cardId, mês de referência): reimportar a mesma fatura ATUALIZA
+  // em vez de duplicar — é a mesma lógica de "substituir" pedida pelo usuário.
+  const existingInv=(await dbGetAll('cc_invoices')).find(i=>i.cardId===card.id&&i.referenceMonth===_pendingCcRefMonth);
+  const invoiceId=existingInv?existingInv.id:uid();
   await dbPut('cc_invoices',{
     id:invoiceId,cardId:card.id,referenceMonth:_pendingCcRefMonth,
-    itemCount:count,total,
+    items:cleanItems,itemCount:cleanItems.length,total,
     importedAt:new Date().toISOString()
   });
+  await syncCardSummaryTransactions(card.id);
   document.getElementById('cc-upload-modal').classList.remove('open');
   _pendingCcItems=[];_pendingCcRefMonth=null;
-  alert(`✓ Fatura importada com sucesso!\n\n${count} despesa(s) criada(s) em Contas a Pagar\nTotal: ${fmt(total)}`);
+  alert(`✓ Fatura importada com sucesso!\n\n${existingInv?'Fatura deste cartão/mês atualizada.':'Nova fatura registrada.'}\nTotal do mês: ${fmt(total)}\nAs parcelas futuras foram projetadas automaticamente.`);
   await renderCartoes();
 }
 
@@ -4687,10 +4683,9 @@ window.FC={
   uploadCcInvoice:id=>openCcUploadModal(id),
   delCcInvoice:async id=>{
     const inv=await dbGet('cc_invoices',id);if(!inv)return;
-    if(!confirm(`Excluir esta fatura?\n\nIsso removerá ${inv.itemCount||0} despesa(s) ainda não pagas de Contas a Pagar.`))return;
-    const allTx=await dbGetAll('transactions');
-    for(const t of allTx){if(t.ccInvoiceId===id&&t.status!=='paid')await dbDelete('transactions',t.id);}
+    if(!confirm(`Excluir a fatura de ${inv.referenceMonth||'—'}?\n\nA despesa deste cartão nesse mês (e as projeções futuras que só existiam por causa dela) será recalculada — o que já estiver marcado como pago não é mexido.`))return;
     await dbDelete('cc_invoices',id);
+    await syncCardSummaryTransactions(inv.cardId);
     await renderCartoes();
   },
   viewInv:id=>viewInvoice(id),
