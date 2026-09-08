@@ -4103,7 +4103,9 @@ function renderCcSummary(card){
 }
 
 async function importCcItems(card){
-  const items=_pendingCcItems.filter(it=>it.enabled&&it.description&&it.amount>0);
+  // amount!==0 (não >0): estornos/créditos negativos (ex: "ESTORNO JUROS DE
+  // FINANC -0,66") são legítimos e devem reduzir o total da fatura, não sumir.
+  const items=_pendingCcItems.filter(it=>it.enabled&&it.description&&it.amount!==0&&!isNaN(it.amount));
   if(!items.length){alert('Nenhum item selecionado.');return;}
   const cleanItems=items.map(it=>({
     id:it.id||uid(),description:it.description,amount:parseFloat(it.amount),
@@ -5097,7 +5099,7 @@ if(session){
   initFirebase().then(ok=>{if(ok)fbConnectAuthState();});
 }else{showLoginScreen();}
 
-window._ccTest={readPdfText,parseInvoiceLines,detectReferenceMonth,detectStatedTotal,dbGetAll,dbGet,dbPut,processCcPdf,syncCardSummaryTransactions,computeCardMonth};
+window._ccTest={readPdfText,parseInvoiceLines,detectReferenceMonth,detectStatedTotal,dbGetAll,dbGet,dbPut,dbDelete,processCcPdf,syncCardSummaryTransactions,computeCardMonth};
 
 })();
 </script>
