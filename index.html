@@ -3781,6 +3781,11 @@ function fixAccentSpacing(s){
     s=s.replace(new RegExp(`^([${acc}])\\s`),'$1');
     s=s.replace(new RegExp(`\\s([${acc}])$`),'$1');
   }while(s!==prev);
+  // Mesmo problema com o sinal de "-" de valores negativos: o PDF.js às vezes
+  // extrai o "-" como item à parte, virando "DIF - 52,50" em vez de "DIF
+  // -52,50" — o "-" ficava perdido na descrição e o valor virava positivo.
+  // Cola de volta o "-" no número que vem logo depois.
+  s=s.replace(/-\s+(?=\d)/g,'-');
   return s;
 }
 async function readPdfText(file){
@@ -3836,7 +3841,11 @@ function parseInvoiceLines(lines){
   const reBR=/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s+(.+?)\s+(?:R\$\s*)?(-?[\d.]+,\d{2})\s*$/;
   const reMonth=/^(\d{1,2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)(?:\s+\d{2,4})?\s+(.+?)\s+(?:R\$\s*)?(-?[\d.]+,\d{2})\s*$/i;
   const reISO=/^(\d{4})-(\d{2})-(\d{2})\s+(.+?)\s+(?:R\$\s*)?(-?[\d.]+,\d{2})\s*$/;
-  const reSkipKeywords=/pagamento|total|saldo anterior|pagamentos efetuados|encargo|mensalidade do cart|juros|iof|multa|estorno do pagamento/i;
+  // Ancorado no INÍCIO da linha: sem isso, "juros"/"multa"/"iof" também batem
+  // dentro de descrições de compra reais (ex: "PGCONTA MULTA RENA", "ESTORNO
+  // JUROS DE FINANC") — uma transação de verdade sempre começa com uma data,
+  // então só descarta quando a linha em si começa com uma dessas palavras.
+  const reSkipKeywords=/^(pagamento|total|saldo anterior|pagamentos efetuados|encargo|mensalidade do cart|juros|iof|multa por atraso|estorno do pagamento)/i;
   const reAnyMoney=/-?[\d.]+,\d{2}/;
   const isTxLine=ln=>reBR.test(ln)||reMonth.test(ln)||reISO.test(ln);
   for(let i=0;i<lines.length;i++){
