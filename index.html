@@ -2233,7 +2233,7 @@ function computeCardMonth(ym,invoices){
   }
   if(!best)return{total:0,items:[]};
   const items=best.covering.map(it=>({
-    description:it.description,amount:it.amount,categoryId:it.categoryId||null,
+    id:it.id||null,description:it.description,amount:it.amount,categoryId:it.categoryId||null,
     installmentNumber:it.installmentTotal?it.installmentNumber+best.offset:null,
     installmentTotal:it.installmentTotal||null,sourceRefMonth:best.refMonth
   }));
@@ -3545,7 +3545,7 @@ async function renderCcDashboard(cards){
 
   // ── Mês navegado: dados específicos daquele mês (é isso que separa a visão por mês) ──
   const viewItems=[];
-  for(const c of scopedCards){const{items}=computeCardMonth(viewYm,invByCard[c.id]);for(const it of items)viewItems.push({...it,cardName:c.name});}
+  for(const c of scopedCards){const{items}=computeCardMonth(viewYm,invByCard[c.id]);for(const it of items)viewItems.push({...it,cardName:c.name,cardId:c.id});}
   const totalMesView=viewItems.reduce((s,it)=>s+it.amount,0);
   const sourceRefMonth=viewItems[0]?.sourceRefMonth;
   const isProjected=sourceRefMonth&&sourceRefMonth!==viewYm;
@@ -3583,7 +3583,8 @@ async function renderCcDashboard(cards){
     </tbody>
   </table>`;
 
-  const catMap=Object.fromEntries((await dbGetAll('categories')).map(c=>[c.id,c]));
+  const allCats=(await dbGetAll('categories')).filter(c=>c.type==='expense');
+  const catMap=Object.fromEntries(allCats.map(c=>[c.id,c]));
   const grouped={};
   for(const it of viewItems){const cat=catMap[it.categoryId];const name=cat?cat.name:'Sem categoria';if(!grouped[name])grouped[name]={val:0,icon:cat?cat.icon:'box'};grouped[name].val+=it.amount;}
   const catEntries=Object.entries(grouped).sort((a,b)=>b[1].val-a[1].val);
@@ -3613,10 +3614,19 @@ async function renderCcDashboard(cards){
   <div class="grid-2">
     <div class="panel"><div class="panel-title">Categoria — ${MONTHS_SHORT[curMonth-1]}/${curYear}</div><div class="panel-sub">Compras deste mês por categoria</div>${catHtml}</div>
     <div class="panel">
-      <div class="panel-title">Lançamentos — ${MONTHS_SHORT[curMonth-1]}/${curYear}</div><div class="panel-sub">Itens deste mês</div>
-      <div class="filter-bar"><div class="filter-search"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="cc-tbl-search" placeholder="Buscar por descrição..."></div></div>
+      <div class="panel-title">Lançamentos — ${MONTHS_SHORT[curMonth-1]}/${curYear}</div><div class="panel-sub">Itens deste mês — clique numa coluna para ordenar, ou na categoria de um item pra corrigi-la</div>
+      <div class="filter-bar">
+        <div class="filter-search"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="cc-tbl-search" placeholder="Buscar por descrição..."></div>
+        <select id="cc-tbl-cat-filter"><option value="">Todas as categorias</option>${Array.from(new Set(viewItems.map(it=>it.categoryId||''))).map(cid=>`<option value="${cid}">${cid&&catMap[cid]?esc(catMap[cid].name):'Sem categoria'}</option>`).join('')}</select>
+      </div>
       <div style="overflow-x:auto;max-height:340px;overflow-y:auto"><table class="data-table" id="cc-items-table">
-        <thead><tr>${scope==='all'?'<th>Cartão</th>':''}<th>Descrição</th><th>Categoria</th><th>Parcela</th><th>Valor</th></tr></thead>
+        <thead><tr>
+          ${scope==='all'?'<th>Cartão</th>':''}
+          <th class="sort-th" data-ccsort="description">Descrição<span class="arrows"><span class="up">▲</span><span class="down">▼</span></span></th>
+          <th class="sort-th" data-ccsort="categoryName">Categoria<span class="arrows"><span class="up">▲</span><span class="down">▼</span></span></th>
+          <th class="sort-th" data-ccsort="installmentNumber">Parcela<span class="arrows"><span class="up">▲</span><span class="down">▼</span></span></th>
+          <th class="sort-th" data-ccsort="amount">Valor<span class="arrows"><span class="up">▲</span><span class="down">▼</span></span></th>
+        </tr></thead>
         <tbody id="cc-items-tbody-view"></tbody>
       </table></div>
     </div>
@@ -3975,6 +3985,19 @@ async function importCcItems(card){
   document.getElementById('cc-upload-modal').classList.remove('open');
   _pendingCcItems=[];_pendingCcRefMonth=null;
   alert(`✓ Fatura importada com sucesso!\n\n${existingInv?'Fatura deste cartão/mês atualizada.':'Nova fatura registrada.'}\nTotal do mês: ${fmt(total)}\nAs parcelas futuras foram projetadas automaticamente.`);
+  await renderCartoes();
+}
+
+// Edição de categoria PÓS-importação: acha o item dentro da fatura de origem
+// (pelo mês em que a compra foi originalmente lançada) e atualiza só a categoria
+// — o valor/parcela não mudam, então não precisa recalcular Contas a Pagar.
+async function updateCcItemCategory(cardId,sourceRefMonth,itemId,categoryId){
+  const inv=(await dbGetAll('cc_invoices')).find(i=>i.cardId===cardId&&i.referenceMonth===sourceRefMonth);
+  if(!inv)return;
+  const item=(inv.items||[]).find(it=>it.id===itemId);
+  if(!item)return;
+  item.categoryId=categoryId||null;
+  await dbPut('cc_invoices',inv);
   await renderCartoes();
 }
 
@@ -4887,6 +4910,7 @@ window.FC={
   },
   uploadCcInvoice:id=>openCcUploadModal(id),
   selectCc:async id=>{_selectedCcId=id;await renderCartoes();},
+  updateCcItemCategory:(cardId,sourceRefMonth,itemId,categoryId)=>updateCcItemCategory(cardId,sourceRefMonth,itemId,categoryId),
   delCcInvoice:async id=>{
     const inv=await dbGet('cc_invoices',id);if(!inv)return;
     if(!confirm(`Excluir a fatura de ${inv.referenceMonth||'—'}?\n\nA despesa deste cartão nesse mês (e as projeções futuras que só existiam por causa dela) será recalculada — o que já estiver marcado como pago não é mexido.`))return;
