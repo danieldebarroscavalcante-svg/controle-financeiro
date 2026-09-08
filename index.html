@@ -4822,6 +4822,7 @@ window.FC={
     await renderCartoes();
   },
   uploadCcInvoice:id=>openCcUploadModal(id),
+  selectCc:async id=>{_selectedCcId=id;await renderCartoes();},
   delCcInvoice:async id=>{
     const inv=await dbGet('cc_invoices',id);if(!inv)return;
     if(!confirm(`Excluir a fatura de ${inv.referenceMonth||'—'}?\n\nA despesa deste cartão nesse mês (e as projeções futuras que só existiam por causa dela) será recalculada — o que já estiver marcado como pago não é mexido.`))return;
