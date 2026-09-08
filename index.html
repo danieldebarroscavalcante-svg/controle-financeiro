@@ -3766,6 +3766,23 @@ async function loadPDFJS(){
     document.head.appendChild(s);
   });
 }
+// Algumas faturas (confirmado com Itaú) fazem o PDF.js extrair letras
+// acentuadas como um "item" de texto isolado, e como sempre juntamos os itens
+// de uma linha com espaço, isso vira um espaço solto ao redor da letra — ex:
+// "servi ç os" em vez de "serviços", "pr ó ximas" em vez de "próximas". Isso já
+// quebrou a detecção da seção de parcelas futuras (o texto nunca batia com o
+// regex). Corrige colando de volta a letra acentuada isolada na palavra vizinha.
+function fixAccentSpacing(s){
+  const acc='áàâãéêìíîòóôõùúüçñÁÀÂÃÉÊÌÍÎÒÓÔÕÙÚÜÇÑ';
+  let prev;
+  do{
+    prev=s;
+    s=s.replace(new RegExp(`\\s([${acc}])\\s`,'g'),'$1');
+    s=s.replace(new RegExp(`^([${acc}])\\s`),'$1');
+    s=s.replace(new RegExp(`\\s([${acc}])$`),'$1');
+  }while(s!==prev);
+  return s;
+}
 async function readPdfText(file){
   await loadPDFJS();
   const buf=await file.arrayBuffer();
@@ -3780,7 +3797,7 @@ async function readPdfText(file){
     const sortedYs=Object.keys(byLine).map(Number).sort((a,b)=>b-a);
     for(const y of sortedYs){
       const lineParts=byLine[y].sort((a,b)=>a.x-b.x).map(p=>p.s);
-      const ln=lineParts.join(' ').replace(/\s+/g,' ').trim();
+      const ln=fixAccentSpacing(lineParts.join(' ').replace(/\s+/g,' ').trim());
       if(ln)lines.push(ln);
     }
   }
