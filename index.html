@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.09.07.4">
+<meta name="version" content="2026.09.07.5">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -5014,8 +5014,6 @@ if(session){
   startApp(session);
   initFirebase().then(ok=>{if(ok)fbConnectAuthState();});
 }else{showLoginScreen();}
-
-window._ccTest={setPending:(items,ref,stated)=>{_pendingCcItems=items;_pendingCcRefMonth=ref;_pendingCcStatedTotal=stated!==undefined?stated:null;},importCcItems,syncCardSummaryTransactions,computeCardMonth,dbGetAll,dbGet,parseInvoiceLines,detectStatedTotal,renderCcParseResult,updateMismatchWarning};
 
 })();
 </script>
