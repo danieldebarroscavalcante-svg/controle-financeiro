@@ -3852,6 +3852,7 @@ async function processCcPdf(file,card){
 }
 
 function stripAccents(s){return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'');}
+function titleCase(s){return String(s||'').toLowerCase().replace(/(^|\s)\p{L}/gu,c=>c.toUpperCase());}
 // Tenta achar uma categoria já cadastrada cujo nome apareça no texto informado
 // (prioriza a dica de categoria extraída da própria fatura — texto antes do
 // ponto na linha abaixo da compra, ex: "VESTUÁRIO . SÃO PAULO" -> "VESTUÁRIO" —
@@ -3866,8 +3867,30 @@ function guessCategoryId(text,cats){
 
 async function renderCcParseResult(card){
   const items=_pendingCcItems;
-  const cats=(await dbGetAll('categories')).filter(c=>c.type==='expense');
-  for(const it of items){if(it.categoryId===undefined)it.categoryId=guessCategoryId(it.categoryHint,cats)||guessCategoryId(it.description,cats);}
+  let cats=(await dbGetAll('categories')).filter(c=>c.type==='expense');
+  // Se a fatura trouxe uma categoria (texto antes do ponto) e ela não bate com
+  // nenhuma categoria sua já cadastrada, CRIA a categoria automaticamente com
+  // esse nome — em vez de simplesmente deixar "Sem categoria" — e reaproveita a
+  // mesma categoria nova para outros itens da mesma fatura com a mesma dica.
+  const createdThisImport={};
+  for(const it of items){
+    if(it.categoryId!==undefined)continue;
+    let cid=guessCategoryId(it.categoryHint,cats)||guessCategoryId(it.description,cats);
+    if(!cid&&it.categoryHint){
+      const key=stripAccents(it.categoryHint).toLowerCase().trim();
+      if(key){
+        if(createdThisImport[key]){cid=createdThisImport[key];}
+        else{
+          const newCat={id:uid(),name:titleCase(it.categoryHint),type:'expense',color:'#C6A15E',icon:'box'};
+          await dbPut('categories',newCat);
+          cats=[...cats,newCat];
+          createdThisImport[key]=newCat.id;
+          cid=newCat.id;
+        }
+      }
+    }
+    it.categoryId=cid||'';
+  }
   const total=items.filter(it=>it.enabled).reduce((s,it)=>s+it.amount*(it.installmentTotal||1),0);
   const totalThisMonth=items.filter(it=>it.enabled).reduce((s,it)=>s+it.amount,0);
   const catOptsFor=selId=>`<option value="">Sem categoria</option>`+cats.map(c=>`<option value="${c.id}" ${c.id===selId?'selected':''}>${esc(c.name)}</option>`).join('');
@@ -3933,7 +3956,7 @@ async function importCcItems(card){
   const items=_pendingCcItems.filter(it=>it.enabled&&it.description&&it.amount>0);
   if(!items.length){alert('Nenhum item selecionado.');return;}
   const cleanItems=items.map(it=>({
-    description:it.description,amount:parseFloat(it.amount),
+    id:it.id||uid(),description:it.description,amount:parseFloat(it.amount),
     installmentNumber:it.installmentTotal?it.installmentNumber:null,
     installmentTotal:it.installmentTotal||null,
     categoryId:it.categoryId||null
