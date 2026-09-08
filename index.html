@@ -4084,7 +4084,12 @@ function updateMismatchWarning(){
   const el=document.getElementById('cc-mismatch-warning');
   if(!el)return;
   const totalThisMonth=_pendingCcItems.filter(it=>it.enabled).reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
-  const mismatch=_pendingCcStatedTotal!=null&&Math.abs(totalThisMonth-_pendingCcStatedTotal)>0.05;
+  // Tolerância de R$2 ou 1% do total (o que for maior) — cobre diferenças
+  // pequenas e conhecidas (ex: repasse de IOF de compra internacional, que
+  // fica numa linha sem data própria e não é capturado) sem gerar alarme
+  // falso; um erro de leitura de verdade costuma ser bem maior que isso.
+  const tolerance=_pendingCcStatedTotal!=null?Math.max(2,_pendingCcStatedTotal*0.01):0;
+  const mismatch=_pendingCcStatedTotal!=null&&Math.abs(totalThisMonth-_pendingCcStatedTotal)>tolerance;
   el.innerHTML=mismatch?`<div style="background:var(--red-l);border:1px solid var(--red);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text)">⚠️ A fatura em PDF diz que o total é <strong>${fmt(_pendingCcStatedTotal)}</strong>, mas a soma dos itens marcados abaixo deu <strong>${fmt(totalThisMonth)}</strong>. Pode ter linha de outro mês/seção sendo lida por engano — revise a lista e desmarque o que não for deste mês antes de importar.</div>`:'';
 }
 
