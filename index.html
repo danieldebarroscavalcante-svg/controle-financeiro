@@ -5015,6 +5015,8 @@ if(session){
   initFirebase().then(ok=>{if(ok)fbConnectAuthState();});
 }else{showLoginScreen();}
 
+window._ccTest={setPending:(items,ref,stated)=>{_pendingCcItems=items;_pendingCcRefMonth=ref;_pendingCcStatedTotal=stated!==undefined?stated:null;},importCcItems,syncCardSummaryTransactions,computeCardMonth,dbGetAll,dbGet,parseInvoiceLines,detectStatedTotal,renderCcParseResult,updateMismatchWarning};
+
 })();
 </script>
 </body>
