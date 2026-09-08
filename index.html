@@ -2123,6 +2123,18 @@ async function seed(){const ex=await dbGetAll('categories');if(ex.length)return;
 // ══ RECURRENCE ════════════════════════════════════════════════════════
 // Helpers de recorrência (escopo de módulo)
 function fmtLocalDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+// Soma meses a uma data (y,m 1-based,day) reclampando o dia-do-mês a cada mês
+// (evita o bug de Date.setMonth() pular meses curtos, ex: 31/01 + 1 mês -> 03/03 em vez de 28/02).
+// Só usa componentes locais de ano/mês/dia — nunca parseia string ISO nem usa toISOString(),
+// então não sofre o desvio de fuso horário que ocorre em timezones negativos (ex: Brasil).
+function addMonthsClampedStr(y,m,day,monthsToAdd){
+  const total=(m-1)+monthsToAdd;
+  const ty=y+Math.floor(total/12);
+  const tm=((total%12)+12)%12;
+  const lastDay=new Date(ty,tm+1,0).getDate();
+  const td=Math.min(day,lastDay);
+  return `${ty}-${String(tm+1).padStart(2,'0')}-${String(td).padStart(2,'0')}`;
+}
 // id DETERMINÍSTICO por (recorrência, data): dois aparelhos geram o MESMO id,
 // então a sincronização por união não cria duplicatas.
 function recurOccId(recId,date){return `rec_${recId}_${date}`;}
@@ -3013,7 +3025,7 @@ async function renderPagar(){
   const sortOpts={tipoRec:getTiposRecebimento(),tipoPag:getTiposPagamento(),payModes:getPayModes()};
   txs.sort((a,b)=>compareSort(a,b,_pSort.col,_pSort.dir,catMap,sortOpts));
   applyVisualSort('#pagar-sort-row',_pSort);
-  const today=new Date().toISOString().split('T')[0];
+  const today=fmtLocalDate(new Date());
   const paid=txs.filter(t=>t.status==='paid').reduce((s,t)=>s+t.amount,0);
   const pending=txs.filter(t=>t.status==='pending'&&t.date>=today).reduce((s,t)=>s+t.amount,0);
   const overdue=txs.filter(t=>t.status==='pending'&&t.date<today).reduce((s,t)=>s+t.amount,0);
@@ -3054,7 +3066,7 @@ async function renderPagar(){
 async function renderVencimentos(){
   const[allTx,cats]=await Promise.all([dbGetAll('transactions'),dbGetAll('categories')]);
   const catMap=Object.fromEntries(cats.map(c=>[c.id,c]));
-  const today=new Date().toISOString().split('T')[0];
+  const today=fmtLocalDate(new Date());
   const todayTxs=allTx.filter(t=>t.status==='pending'&&t.date===today&&t.type==='expense');
   const pendTxs=allTx.filter(t=>t.status==='pending'&&t.date<today&&t.type==='expense').sort((a,b)=>a.date.localeCompare(b.date));
   const renderRow=(t)=>{const cat=catMap[t.categoryId];const[,m,d]=t.date.split('-');return`<div class="venc-item">
@@ -3561,14 +3573,12 @@ async function importCcItems(card){
   const invoiceId=uid();
   let total=0,count=0;
   for(const it of items){
-    const baseDate=new Date(refY,refM-1,Math.min(dueDay,new Date(refY,refM,0).getDate()));
     if(it.installmentTotal&&it.installmentTotal>1){
       // Parcelada: cria N parcelas a partir do mês de referência
       const grpId=uid();
       const remainingFromCurrent=it.installmentTotal-it.installmentNumber+1;
-      let d=new Date(baseDate);
       for(let i=0;i<remainingFromCurrent;i++){
-        const ds=d.toISOString().split('T')[0];
+        const ds=addMonthsClampedStr(refY,refM,dueDay,i);
         const parcNum=it.installmentNumber+i;
         await dbPut('transactions',{
           id:uid(),type:'expense',description:`${it.description}`,amount:parseFloat(it.amount),date:ds,dueDate:ds,
@@ -3579,12 +3589,11 @@ async function importCcItems(card){
           ccCardId:card.id,ccInvoiceId:invoiceId,
           attachments:[]
         });
-        d.setMonth(d.getMonth()+1);
       }
       total+=parseFloat(it.amount)*remainingFromCurrent;count+=remainingFromCurrent;
     } else {
       // À vista: cria 1 despesa no mês da fatura
-      const ds=baseDate.toISOString().split('T')[0];
+      const ds=addMonthsClampedStr(refY,refM,dueDay,0);
       await dbPut('transactions',{
         id:uid(),type:'expense',description:it.description,amount:parseFloat(it.amount),date:ds,dueDate:ds,
         categoryId:cardCat.id,paymentMethod:'credit_card',status:'pending',
@@ -3629,9 +3638,9 @@ function catGroupHTML(cats){
 async function updateNotifications(){
   const allTx=await dbGetAll('transactions').catch(()=>[]);
   const invs=await dbGetAll('invoices').catch(()=>[]);
-  const today=new Date().toISOString().split('T')[0];
+  const today=fmtLocalDate(new Date());
   const in3=new Date();in3.setDate(in3.getDate()+3);
-  const in3Str=in3.toISOString().split('T')[0];
+  const in3Str=fmtLocalDate(in3);
   const notifs=[];
   // Overdue payments
   allTx.filter(t=>t.status==='pending'&&t.date<today&&t.type==='expense').forEach(t=>{
@@ -3669,7 +3678,7 @@ async function openTxModal(id,defaultType){
   if(window._catSelectGlobalClick){document.removeEventListener('click',window._catSelectGlobalClick);window._catSelectGlobalClick=null;}
   const[cats,tx]=await Promise.all([dbGetAll('categories'),id?dbGet('transactions',id):Promise.resolve(null)]);
   document.getElementById('tx-modal-title').textContent=id?'Editar Lançamento':'Novo Lançamento';
-  const today=new Date().toISOString().split('T')[0];
+  const today=fmtLocalDate(new Date());
   const curType=tx?tx.type:(defaultType||'expense');
   const curPType=tx?(tx.installmentGroupId?'installment':tx.recurrenceId?'recurring':'once'):'once';
   // Categorias agora vão por dropdown customizado (renderizado depois)
@@ -3921,11 +3930,10 @@ async function saveTx(id,existing){
   } else if(!id&&ptype==='installment'){
     const n=parseInt(document.getElementById('f-parcelas').value)||12;
     const grpId=uid();
-    let d=new Date(date);
+    const [iy,im,idy]=date.split('-').map(Number);
     for(let i=1;i<=n;i++){
-      const ds=d.toISOString().split('T')[0];
+      const ds=addMonthsClampedStr(iy,im,idy,i-1);
       await dbPut('transactions',{...baseData,id:uid(),date:ds,status:i===1?status:'pending',installmentGroupId:grpId,installmentNumber:i,installmentTotal:n,attachments:i===1?attachments:[]});
-      d.setMonth(d.getMonth()+1);
     }
   } else {
     const txData={id:id||uid(),...baseData,recurrenceId:existing?.recurrenceId||null,installmentGroupId:existing?.installmentGroupId||null,installmentNumber:existing?.installmentNumber||null,installmentTotal:existing?.installmentTotal||null};
@@ -3989,7 +3997,7 @@ async function openCatModal(id,onSaved,initialType){
 // ══ FATURAS ═══════════════════════════════════════════════════════════
 async function renderFaturas(){
   const invs=await dbGetAll('invoices');
-  const today=new Date().toISOString().split('T')[0];
+  const today=fmtLocalDate(new Date());
   // Mark as overdue
   for(const i of invs){if(i.status==='sent'&&i.dueDate&&i.dueDate<today){i.status='overdue';await dbPut('invoices',i);}}
   const fresh=await dbGetAll('invoices');
@@ -4033,9 +4041,9 @@ function calcInvTotal(inv){
 async function openInvoiceModal(id){
   const inv=id?await dbGet('invoices',id):null;
   document.getElementById('invoice-modal-title').textContent=id?'Editar Fatura':'Nova Fatura';
-  const today=new Date().toISOString().split('T')[0];
+  const today=fmtLocalDate(new Date());
   const due=new Date();due.setDate(due.getDate()+15);
-  const dueStr=due.toISOString().split('T')[0];
+  const dueStr=fmtLocalDate(due);
   invItems=inv?[...(inv.items||[])]:[{id:uid(),description:'',qty:1,unitPrice:0}];
   // load saved emitente from localStorage
   const savedEmit=JSON.parse(localStorage.getItem('fc_emitente')||'{}');
@@ -4242,7 +4250,7 @@ async function renderDocumentos(){
 async function openReciboModal(){
   const txs=await dbGetAll('transactions');
   const txOpts=txs.filter(t=>t.status==='paid'||t.status==='pending').sort((a,b)=>b.date.localeCompare(a.date)).slice(0,50).map(t=>`<option value="${t.id}">${fmtDate(t.date)} - ${esc(t.description)} - ${fmt(t.amount)}</option>`).join('');
-  const today=new Date().toISOString().split('T')[0];
+  const today=fmtLocalDate(new Date());
   const savedEmit=JSON.parse(localStorage.getItem('fc_emitente')||'{}');
   document.getElementById('recibo-form').innerHTML=`
     <div class="form-group"><label>Vincular a um lançamento (opcional)</label>
@@ -4320,7 +4328,7 @@ function renderReciboDoc(r){
 }
 
 async function openContratoModal(){
-  const today=new Date().toISOString().split('T')[0];
+  const today=fmtLocalDate(new Date());
   const savedEmit=JSON.parse(localStorage.getItem('fc_emitente')||'{}');
   document.getElementById('contrato-form').innerHTML=`
     <div class="form-group"><label>Título do Contrato *</label><input type="text" id="ct-title" value="Contrato de Prestação de Serviços" required></div>
