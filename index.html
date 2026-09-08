@@ -3789,6 +3789,11 @@ async function readPdfText(file){
 
 // ───── Parser de fatura ─────
 const MESES_ABREV={jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
+// Marca o início de seções que NÃO são a fatura deste mês (previsão de parcelas
+// futuras, resumo de parcelamentos em aberto etc.) — muitas faturas (Itaú,
+// Nubank...) trazem essa prévia no fim do PDF, com linhas no mesmo formato de
+// data+descrição+valor, e sem isso elas eram somadas junto com o mês atual.
+const reFutureSection=/compras?\s+parceladas?\s*[-–—]?\s*pr[oó]ximas?\s+faturas?|parcelamentos?\s+futuros?|lan[cç]amentos?\s+futuros?|pr[oó]ximas?\s+faturas?|parcelas?\s+a\s+vencer|resumo\s+d(?:e|as)\s+parcelas?/i;
 function parseInvoiceLines(lines){
   const items=[];
   const reBR=/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s+(.+?)\s+(?:R\$\s*)?(-?[\d.]+,\d{2})\s*$/;
@@ -3799,6 +3804,7 @@ function parseInvoiceLines(lines){
   const isTxLine=ln=>reBR.test(ln)||reMonth.test(ln)||reISO.test(ln);
   for(let i=0;i<lines.length;i++){
     const ln=lines[i];
+    if(reFutureSection.test(ln))break; // a partir daqui é prévia de meses futuros, não a fatura atual
     if(reSkipKeywords.test(ln))continue;
     let m=ln.match(reBR);
     let day,month,desc,valStr;
@@ -3840,6 +3846,19 @@ function detectReferenceMonth(lines){
   return null;
 }
 
+// Tenta achar o valor total desta fatura, do jeito que o próprio banco escreve
+// (ex: "Total desta fatura R$ 1.234,56"), pra comparar com a soma que o
+// sistema calculou e avisar se vier diferente — sinal de que a leitura pegou
+// linhas que não deveriam entrar (ex: prévia de faturas futuras).
+function detectStatedTotal(lines){
+  const reTotal=/total\s+(?:desta\s+fatura|da\s+fatura(?:\s+atual)?|a\s+pagar|fatura)[:\s]*(?:r\$\s*)?(-?[\d.]+,\d{2})/i;
+  for(const ln of lines){
+    const m=ln.match(reTotal);
+    if(m){const v=parseFloat(m[1].replace(/\./g,'').replace(',','.'));if(!isNaN(v))return v;}
+  }
+  return null;
+}
+
 async function openCcUploadModal(cardId){
   const card=await dbGet('creditcards',cardId);
   if(!card){alert('Cartão não encontrado.');return;}
@@ -3862,7 +3881,7 @@ async function openCcUploadModal(cardId){
   document.getElementById('cc-upload-modal').classList.add('open');
 }
 
-let _pendingCcItems=[],_pendingCcRefMonth=null;
+let _pendingCcItems=[],_pendingCcRefMonth=null,_pendingCcStatedTotal=null;
 async function processCcPdf(file,card){
   const stEl=document.getElementById('cc-parse-status');
   const resEl=document.getElementById('cc-parse-result');
@@ -3872,7 +3891,7 @@ async function processCcPdf(file,card){
     const lines=await readPdfText(file);
     const items=parseInvoiceLines(lines);
     const refMonth=detectReferenceMonth(lines)||`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
-    _pendingCcItems=items;_pendingCcRefMonth=refMonth;
+    _pendingCcItems=items;_pendingCcRefMonth=refMonth;_pendingCcStatedTotal=detectStatedTotal(lines);
     if(!items.length){
       stEl.innerHTML=`<div style="color:var(--red);font-weight:600">⚠️ Nenhuma despesa detectada no PDF.<br><small style="font-weight:400">O PDF pode estar protegido ou em formato não reconhecido. Tente outro arquivo ou cadastre manualmente.</small></div>`;
       return;
