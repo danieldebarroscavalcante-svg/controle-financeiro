@@ -3886,7 +3886,10 @@ function parseInvoiceLines(lines){
     if(!day||day<1||day>31)continue;
     const amount=parseFloat(valStr.replace(/\./g,'').replace(',','.'));
     if(isNaN(amount)||amount===0)continue;
-    if(amount<0)continue; // ignora créditos/pagamentos
+    // Valores negativos (estorno/crédito, ex: "ESTORNO JUROS DE FINANC -0,66")
+    // ENTRAM sim — reduzem o total da fatura corretamente, igual o banco soma.
+    // Linhas de pagamento em si (ex: "Pagamento efetuado ... -12.782,64") já
+    // são cortadas antes pelo reSkipKeywords, então não duplicam aqui.
     // Detectar parcelas (X/Y) ao final ou no meio da descrição
     const parcMatch=desc.match(/(\d{1,2})\/(\d{1,2})\b/);
     let instCur=null,instTot=null;
