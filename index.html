@@ -3810,7 +3810,10 @@ const MESES_ABREV={jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,
 // futuras, resumo de parcelamentos em aberto etc.) — muitas faturas (Itaú,
 // Nubank...) trazem essa prévia no fim do PDF, com linhas no mesmo formato de
 // data+descrição+valor, e sem isso elas eram somadas junto com o mês atual.
-const reFutureSection=/compras?\s+parceladas?\s*[-–—]?\s*pr[oó]ximas?\s+faturas?|parcelamentos?\s+futuros?|lan[cç]amentos?\s+futuros?|pr[oó]ximas?\s+faturas?|parcelas?\s+a\s+vencer|resumo\s+d(?:e|as)\s+parcelas?/i;
+// Frase EXATA confirmada numa fatura Itaú real (não usar algo genérico tipo só
+// "próxima fatura" — isso aparece em texto comum de boleto, ex: "encargos serão
+// cobrados na próxima fatura", e cortaria a leitura cedo demais por engano).
+const reFutureSection=/compras?\s+parceladas?\s*[-–—]?\s*pr[oó]ximas?\s+faturas?/i;
 function parseInvoiceLines(lines){
   const items=[];
   const reBR=/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s+(.+?)\s+(?:R\$\s*)?(-?[\d.]+,\d{2})\s*$/;
