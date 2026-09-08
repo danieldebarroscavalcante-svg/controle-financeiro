@@ -2166,6 +2166,116 @@ function addMonthsClampedStr(y,m,day,monthsToAdd){
   const td=Math.min(day,lastDay);
   return `${ty}-${String(tm+1).padStart(2,'0')}-${String(td).padStart(2,'0')}`;
 }
+
+// ══ CARTÃO — RECONCILIAÇÃO DE FATURAS ═══════════════════════════════════
+// Soma/subtrai meses a uma string 'YYYY-MM' (n pode ser negativo).
+function ymAdd(ym,n){
+  const[y,m]=ym.split('-').map(Number);
+  const total=(m-1)+n;
+  const ty=y+Math.floor(total/12);
+  const tm=((total%12)+12)%12+1;
+  return `${ty}-${String(tm).padStart(2,'0')}`;
+}
+// Diferença em meses entre duas strings 'YYYY-MM' (b-a).
+function ymDiff(a,b){
+  const[ay,am]=a.split('-').map(Number),[by,bm]=b.split('-').map(Number);
+  return(by-ay)*12+(bm-am);
+}
+// Id determinístico da despesa-resumo de um cartão num mês — permite fazer
+// upsert (dbPut sobrescreve no lugar) em vez de duplicar a cada reimportação.
+function ccSummaryId(cardId,ym){return `ccsum_${cardId}_${ym}`;}
+
+// Dado o conjunto de faturas já importadas de um cartão, decide o que está
+// "em aberto" nesse cartão no mês `ym`: usa sempre a fatura com a referência
+// MAIS RECENTE (<=ym) cujos itens cobrem esse mês — assim, quando uma fatura
+// nova chega, ela automaticamente substitui a projeção que uma fatura mais
+// antiga tinha feito para os mesmos meses futuros (nunca soma as duas).
+function computeCardMonth(ym,invoices){
+  let best=null;
+  for(const inv of invoices){
+    if(!inv.referenceMonth||inv.referenceMonth>ym)continue;
+    const offset=ymDiff(inv.referenceMonth,ym);
+    const covering=(inv.items||[]).filter(it=>{
+      if(it.installmentTotal&&it.installmentTotal>1){
+        const remaining=it.installmentTotal-it.installmentNumber+1;
+        return offset>=0&&offset<remaining;
+      }
+      return offset===0;
+    });
+    if(!covering.length)continue;
+    if(!best||inv.referenceMonth>best.refMonth)best={refMonth:inv.referenceMonth,offset,covering};
+  }
+  if(!best)return{total:0,items:[]};
+  const items=best.covering.map(it=>({
+    description:it.description,amount:it.amount,categoryId:it.categoryId||null,
+    installmentNumber:it.installmentTotal?it.installmentNumber+best.offset:null,
+    installmentTotal:it.installmentTotal||null,sourceRefMonth:best.refMonth
+  }));
+  const total=Math.round(items.reduce((s,it)=>s+it.amount,0)*100)/100;
+  return{total,items};
+}
+
+// Recalcula e grava (upsert/apaga) as despesas-resumo de um cartão em Contas a
+// Pagar, uma por mês, cobrindo desde a fatura mais antiga até o mês mais
+// distante projetado por alguma parcela. Nunca mexe em mês já marcado 'paid'.
+async function syncCardSummaryTransactions(cardId){
+  const card=await dbGet('creditcards',cardId);if(!card)return;
+  const allInvs=(await dbGetAll('cc_invoices')).filter(i=>i.cardId===cardId);
+  const allTx=await dbGetAll('transactions');
+  const existingSummaries=allTx.filter(t=>t.ccCardId===cardId&&t.isCcSummary);
+  if(!allInvs.length){
+    for(const t of existingSummaries)if(t.status!=='paid')await dbDelete('transactions',t.id);
+    return;
+  }
+  let minYm=allInvs[0].referenceMonth,maxYm=allInvs[0].referenceMonth;
+  for(const inv of allInvs){
+    if(inv.referenceMonth<minYm)minYm=inv.referenceMonth;
+    let span=1;
+    for(const it of(inv.items||[])){
+      if(it.installmentTotal&&it.installmentTotal>1){
+        const remaining=it.installmentTotal-it.installmentNumber+1;
+        if(remaining>span)span=remaining;
+      }
+    }
+    const lastYm=ymAdd(inv.referenceMonth,span-1);
+    if(lastYm>maxYm)maxYm=lastYm;
+  }
+  // Inclui também meses de resumos já existentes (ex: fatura removida) para poder limpá-los.
+  for(const t of existingSummaries){
+    if(t.ccSummaryMonth&&t.ccSummaryMonth<minYm)minYm=t.ccSummaryMonth;
+    if(t.ccSummaryMonth&&t.ccSummaryMonth>maxYm)maxYm=t.ccSummaryMonth;
+  }
+  const cats=await dbGetAll('categories');
+  let cardCat=cats.find(c=>c.type==='expense'&&/cart(ã|a)o\s+de\s+cr(é|e)dito/i.test(c.name));
+  if(!cardCat){cardCat={id:uid(),name:'Cartão de Crédito',type:'expense',color:'#C6A15E',icon:'credit_card'};await dbPut('categories',cardCat);}
+  const dueDay=card.dueDay||10;
+  const last4=card.lastDigits?card.lastDigits.slice(-4):'';
+  const label=`${card.name}${last4?' final '+last4:''}`;
+  let ym=minYm;
+  while(ym<=maxYm){
+    const{total,items}=computeCardMonth(ym,allInvs);
+    const id=ccSummaryId(cardId,ym);
+    const existing=await dbGet('transactions',id);
+    if(total>0){
+      if(!existing||existing.status!=='paid'){
+        const[y,m]=ym.split('-').map(Number);
+        const ds=addMonthsClampedStr(y,m,dueDay,0);
+        await dbPut('transactions',{
+          id,type:'expense',description:label,amount:total,date:ds,dueDate:ds,
+          categoryId:cardCat.id,paymentMethod:'credit_card',status:existing?existing.status:'pending',
+          notes:`Fatura ${label} · ref. ${items[0]?.sourceRefMonth||ym}`,
+          pagoA:card.name,tipoDespesa:'variavel',tipoPagamento:'fatura',
+          ccCardId:cardId,isCcSummary:true,ccSummaryMonth:ym,
+          attachments:existing?(existing.attachments||[]):[]
+        });
+      }
+    } else if(existing&&existing.status!=='paid'){
+      await dbDelete('transactions',id);
+    }
+    ym=ymAdd(ym,1);
+  }
+}
+
 // id DETERMINÍSTICO por (recorrência, data): dois aparelhos geram o MESMO id,
 // então a sincronização por união não cria duplicatas.
 function recurOccId(recId,date){return `rec_${recId}_${date}`;}
@@ -3531,31 +3641,44 @@ async function processCcPdf(file,card){
       return;
     }
     stEl.innerHTML=`<div style="color:var(--green);font-weight:600">✓ ${items.length} despesa(s) detectada(s). Revise abaixo e clique em Importar.</div>`;
-    renderCcParseResult(card);
+    await renderCcParseResult(card);
   }catch(e){
     console.error(e);
     stEl.innerHTML=`<div style="color:var(--red);font-weight:600">❌ Erro ao processar PDF: ${esc(e.message||String(e))}</div>`;
   }
 }
 
-function renderCcParseResult(card){
+// Tenta achar uma categoria já cadastrada cujo nome apareça na descrição da compra.
+// Simples e honesto: não é IA, é um match de texto — o usuário sempre pode trocar no dropdown.
+function guessCategoryId(desc,cats){
+  const d=(desc||'').toLowerCase();
+  for(const c of cats){if(c.name&&d.includes(c.name.toLowerCase()))return c.id;}
+  return '';
+}
+
+async function renderCcParseResult(card){
   const items=_pendingCcItems;
+  const cats=(await dbGetAll('categories')).filter(c=>c.type==='expense');
+  for(const it of items){if(it.categoryId===undefined)it.categoryId=guessCategoryId(it.description,cats);}
   const total=items.filter(it=>it.enabled).reduce((s,it)=>s+it.amount*(it.installmentTotal||1),0);
   const totalThisMonth=items.filter(it=>it.enabled).reduce((s,it)=>s+it.amount,0);
+  const catOptsFor=selId=>`<option value="">Sem categoria</option>`+cats.map(c=>`<option value="${c.id}" ${c.id===selId?'selected':''}>${esc(c.name)}</option>`).join('');
   document.getElementById('cc-parse-result').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0">
       <div>
         <div style="font-size:13px;font-weight:700">Referência: <strong style="color:var(--primary)">${esc(_pendingCcRefMonth)}</strong></div>
         <div style="font-size:11.5px;color:var(--text3);margin-top:2px">Total da fatura: <strong>${fmt(totalThisMonth)}</strong> · Compromisso futuro (parcelas): <strong>${fmt(total)}</strong></div>
       </div>
-      <button class="btn primary" id="btn-import-cc-items">✓ Importar despesas</button>
+      <button class="btn primary" id="btn-import-cc-items">✓ Importar fatura</button>
     </div>
+    <div style="font-size:11.5px;color:var(--text3);margin-bottom:10px">Vai virar <strong>1 despesa</strong> em Contas a Pagar por mês, no nome do cartão — os itens abaixo só alimentam os gráficos e a tabela do dashboard do cartão.</div>
     <div style="overflow-x:auto;max-height:380px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
       <table class="cc-invoice-tbl">
         <thead><tr>
           <th style="width:40px"><input type="checkbox" id="cc-check-all" checked></th>
           <th style="width:80px">Dia</th>
           <th>Descrição</th>
+          <th style="width:150px">Categoria</th>
           <th style="width:110px">Valor</th>
           <th style="width:110px">Parcela</th>
         </tr></thead>
@@ -3564,6 +3687,7 @@ function renderCcParseResult(card){
           <td><input type="checkbox" data-i="${i}" data-f="enabled" ${it.enabled?'checked':''}></td>
           <td>${String(it.day).padStart(2,'0')}/${String(it.month).padStart(2,'0')}</td>
           <td><input type="text" data-i="${i}" data-f="description" value="${esc(it.description)}"></td>
+          <td><select data-i="${i}" data-f="categoryId">${catOptsFor(it.categoryId)}</select></td>
           <td><input type="text" inputmode="decimal" data-i="${i}" data-f="amount" value="${maskFromNumber(it.amount)}" style="text-align:right"></td>
           <td>${it.installmentTotal?`${it.installmentNumber}/${it.installmentTotal}`:'À vista'}</td>
         </tr>`).join('')}
@@ -3571,9 +3695,10 @@ function renderCcParseResult(card){
       </table>
     </div>`;
   document.getElementById('cc-check-all').addEventListener('change',e=>{const ch=e.target.checked;document.querySelectorAll('#cc-items-tbody input[type=checkbox]').forEach((c,i)=>{c.checked=ch;_pendingCcItems[i].enabled=ch;});renderCcSummary(card);});
-  document.querySelectorAll('#cc-items-tbody input').forEach(inp=>{
+  document.querySelectorAll('#cc-items-tbody input,#cc-items-tbody select').forEach(inp=>{
     if(inp.dataset.f==='amount')attachCurrencyMask(inp);
-    inp.addEventListener('input',()=>{
+    const ev=inp.tagName==='SELECT'?'change':'input';
+    inp.addEventListener(ev,()=>{
       const i=parseInt(inp.dataset.i),f=inp.dataset.f;
       if(f==='enabled')_pendingCcItems[i][f]=inp.checked;
       else if(f==='amount')_pendingCcItems[i][f]=parseCurrency(inp.value);
