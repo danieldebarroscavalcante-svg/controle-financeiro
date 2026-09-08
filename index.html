@@ -3888,7 +3888,11 @@ function detectReferenceMonth(lines){
 // sistema calculou e avisar se vier diferente — sinal de que a leitura pegou
 // linhas que não deveriam entrar (ex: prévia de faturas futuras).
 function detectStatedTotal(lines){
-  const reTotal=/total\s+(?:desta\s+fatura|da\s+fatura(?:\s+atual)?|a\s+pagar|fatura)[:\s]*(?:r\$\s*)?(-?[\d.]+,\d{2})/i;
+  // Só "total desta fatura" (rótulo específico da caixa-resumo) — nada de
+  // "total a pagar" genérico, que também aparece nas simulações de
+  // parcelamento/pagamento mínimo da página 1 com valores BEM diferentes
+  // (já incluindo juros hipotéticos), e pegaria o número errado.
+  const reTotal=/total\s+desta\s+fatura[:\s]*(?:r\$\s*)?(-?[\d.]+,\d{2})/i;
   for(const ln of lines){
     const m=ln.match(reTotal);
     if(m){const v=parseFloat(m[1].replace(/\./g,'').replace(',','.'));if(!isNaN(v))return v;}
