@@ -3816,12 +3816,36 @@ async function readPdfText(file){
     // misturando fatura atual com projeção futura numa bagunça só. Em vez
     // disso, trata cada metade da página como uma coluna à parte, lida por
     // inteiro de cima a baixo, preservando a ordem/adjacência dentro dela.
-    const xs=content.items.map(it=>it.transform[4]);
-    const midX=xs.length?(Math.min(...xs)+Math.max(...xs))/2:0;
-    const leftItems=content.items.filter(it=>it.transform[4]<midX);
-    const rightItems=content.items.filter(it=>it.transform[4]>=midX);
-    lines.push(...buildColumnLines(leftItems));
-    lines.push(...buildColumnLines(rightItems));
+    //
+    // O corte NÃO pode ser a média simples de X (min+max)/2: numa página real,
+    // o valor em R$ da coluna esquerda (alinhado à direita, ex: "175,00") pode
+    // cair bem perto dessa média e ser jogado pro lado errado, separando o
+    // valor da própria data/descrição da mesma compra. Em vez disso, acha o
+    // MAIOR VÃO horizontal entre os textos, procurando só na faixa central da
+    // página (25%-75%) — isso é o corredor real entre as duas colunas, não um
+    // espaço qualquer entre palavras. Só corta se o vão for bem maior que um
+    // espaço comum (senão a página é de uma coluna só e não deve ser cortada).
+    const findColumnSplitX=items=>{
+      const xs=[...new Set(items.map(it=>it.transform[4]))].sort((a,b)=>a-b);
+      if(xs.length<2)return null;
+      const lo=xs[0],hi=xs[xs.length-1];
+      const bandLo=lo+(hi-lo)*0.25,bandHi=lo+(hi-lo)*0.75;
+      let bestGap=0,bestX=null;
+      for(let k=1;k<xs.length;k++){
+        const mid=(xs[k]+xs[k-1])/2;
+        if(mid<bandLo||mid>bandHi)continue;
+        const gap=xs[k]-xs[k-1];
+        if(gap>bestGap){bestGap=gap;bestX=mid;}
+      }
+      return bestGap>=18?bestX:null;
+    };
+    const splitX=findColumnSplitX(content.items);
+    if(splitX==null){
+      lines.push(...buildColumnLines(content.items));
+    }else{
+      lines.push(...buildColumnLines(content.items.filter(it=>it.transform[4]<splitX)));
+      lines.push(...buildColumnLines(content.items.filter(it=>it.transform[4]>=splitX)));
+    }
   }
   return lines;
 }
