@@ -1650,7 +1650,8 @@ function fcSaveTombstones(set){try{localStorage.setItem(TOMB_KEY,JSON.stringify(
 function fcAddTombstone(store,id){const s=fcLoadTombstones();s.add(tombKey(store,id));fcSaveTombstones(s);if(isFirebaseReady())_fbDb.ref(`users/${_fbUser.uid}/_tombstones/${tombKey(store,id)}`).set(Date.now()).catch(()=>{});}
 function fcRemoveTombstone(store,id){const r=localStorage.getItem(TOMB_KEY);if(!r||r==='[]')return;const s=fcLoadTombstones();if(s.delete(tombKey(store,id))){fcSaveTombstones(s);if(isFirebaseReady())_fbDb.ref(`users/${_fbUser.uid}/_tombstones/${tombKey(store,id)}`).remove().catch(()=>{});}}
 
-async function dbPut(s,item){if(item&&typeof item==='object'&&item.id!=null)item.updatedAt=Date.now();const d=await openDB();const result=await new Promise((res,rej)=>{const r=d.transaction(s,'readwrite').objectStore(s).put(item);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});if(item&&item.id!=null)fcRemoveTombstone(s,item.id);if(isFirebaseReady())_fbDb.ref(fbPath(s,item.id)).set(item).catch(e=>console.warn('FB sync:',e));return result;}
+function fcStripUndefined(v){if(Array.isArray(v))return v.map(fcStripUndefined);if(v&&typeof v==='object'){const o={};for(const k in v)if(v[k]!==undefined)o[k]=fcStripUndefined(v[k]);return o;}return v;}
+async function dbPut(s,item){if(item&&typeof item==='object'&&item.id!=null)item.updatedAt=Date.now();const d=await openDB();const result=await new Promise((res,rej)=>{const r=d.transaction(s,'readwrite').objectStore(s).put(item);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});if(item&&item.id!=null)fcRemoveTombstone(s,item.id);if(isFirebaseReady()){try{_fbDb.ref(fbPath(s,item.id)).set(fcStripUndefined(item)).catch(e=>console.warn('FB sync:',e));}catch(e){console.warn('FB sync:',e);}}return result;}
 async function dbDelete(s,id){const d=await openDB();await new Promise((res,rej)=>{const r=d.transaction(s,'readwrite').objectStore(s).delete(id);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);});fcAddTombstone(s,id);if(isFirebaseReady())_fbDb.ref(fbPath(s,id)).remove().catch(e=>console.warn('FB del:',e));}
 function uid(){return crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36);}
 
@@ -3935,10 +3936,10 @@ async function saveTx(id,existing){
         await dbPut('transactions',txData);
       } else if(choice==='previous'){
         const all=await dbGetAll('transactions','recurrenceId',existing.recurrenceId);
-        for(const t of all)if(t.date<=existing.date)await dbPut('transactions',{...t,...baseData,id:t.id,date:t.date,status:t.status,attachments:t.attachments,recurrenceId:t.recurrenceId,installmentGroupId:t.installmentGroupId,installmentNumber:t.installmentNumber,installmentTotal:t.installmentTotal});
+        for(const t of all)if(t.date<=existing.date)await dbPut('transactions',{...t,...baseData,id:t.id,date:t.date,status:t.status,attachments:t.attachments||[],recurrenceId:t.recurrenceId||null,installmentGroupId:t.installmentGroupId||null,installmentNumber:t.installmentNumber||null,installmentTotal:t.installmentTotal||null});
       } else if(choice==='next'){
         const all=await dbGetAll('transactions','recurrenceId',existing.recurrenceId);
-        for(const t of all)if(t.date>=existing.date)await dbPut('transactions',{...t,...baseData,id:t.id,date:t.date,status:t.status,attachments:t.attachments,recurrenceId:t.recurrenceId,installmentGroupId:t.installmentGroupId,installmentNumber:t.installmentNumber,installmentTotal:t.installmentTotal});
+        for(const t of all)if(t.date>=existing.date)await dbPut('transactions',{...t,...baseData,id:t.id,date:t.date,status:t.status,attachments:t.attachments||[],recurrenceId:t.recurrenceId||null,installmentGroupId:t.installmentGroupId||null,installmentNumber:t.installmentNumber||null,installmentTotal:t.installmentTotal||null});
       }
     } else {
       await dbPut('transactions',txData);
