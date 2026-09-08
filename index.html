@@ -3643,16 +3643,40 @@ async function renderCcDashboard(cards){
     <div class="proj-table-wrap">${projTable}</div>
   </div>`;
 
-  const renderRows=filter=>{
-    const q=(filter||'').toLowerCase();
-    const rows=viewItems.filter(r=>!q||r.description.toLowerCase().includes(q));
+  const catOptsFor=selId=>`<option value="">Sem categoria</option>`+allCats.map(c=>`<option value="${c.id}" ${c.id===selId?'selected':''}>${esc(c.name)}</option>`).join('');
+  let ccSort={col:'description',dir:1};
+  const applySort=arr=>{
+    const{col,dir}=ccSort;
+    return[...arr].sort((a,b)=>{
+      let av,bv;
+      if(col==='categoryName'){av=(catMap[a.categoryId]?.name||'').toLowerCase();bv=(catMap[b.categoryId]?.name||'').toLowerCase();}
+      else if(col==='installmentNumber'){av=a.installmentNumber||0;bv=b.installmentNumber||0;}
+      else if(col==='amount'){av=a.amount;bv=b.amount;}
+      else{av=(a.description||'').toLowerCase();bv=(b.description||'').toLowerCase();}
+      if(av<bv)return -1*dir;if(av>bv)return 1*dir;return 0;
+    });
+  };
+  const renderRows=()=>{
+    const q=(document.getElementById('cc-tbl-search')?.value||'').toLowerCase();
+    const catFilter=document.getElementById('cc-tbl-cat-filter')?.value||'';
+    let rows=viewItems.filter(r=>(!q||r.description.toLowerCase().includes(q))&&(catFilter===''||(r.categoryId||'')===catFilter));
+    rows=applySort(rows);
     document.getElementById('cc-items-tbody-view').innerHTML=rows.length?rows.map(r=>{
-      const cat=catMap[r.categoryId];
-      return`<tr>${scope==='all'?`<td>${esc(r.cardName)}</td>`:''}<td>${esc(r.description)}</td><td>${cat?esc(cat.name):'—'}</td><td>${r.installmentTotal?`${r.installmentNumber}/${r.installmentTotal}`:'À vista'}</td><td class="cell-amount neg">${fmt(r.amount)}</td></tr>`;
+      return`<tr>${scope==='all'?`<td>${esc(r.cardName)}</td>`:''}<td>${esc(r.description)}</td><td><select class="inline-editor" style="width:auto;min-width:130px" onchange="FC.updateCcItemCategory('${r.cardId}','${r.sourceRefMonth}','${r.id}',this.value)">${catOptsFor(r.categoryId)}</select></td><td>${r.installmentTotal?`${r.installmentNumber}/${r.installmentTotal}`:'À vista'}</td><td class="cell-amount neg">${fmt(r.amount)}</td></tr>`;
     }).join(''):`<tr><td colspan="${scope==='all'?5:4}" class="empty-row">Nenhum lançamento neste mês.</td></tr>`;
   };
-  renderRows('');
-  document.getElementById('cc-tbl-search').addEventListener('input',e=>renderRows(e.target.value));
+  renderRows();
+  document.getElementById('cc-tbl-search').addEventListener('input',renderRows);
+  document.getElementById('cc-tbl-cat-filter').addEventListener('change',renderRows);
+  document.querySelectorAll('#cc-items-table .sort-th').forEach(th=>{
+    th.addEventListener('click',()=>{
+      const col=th.dataset.ccsort;
+      if(ccSort.col===col)ccSort.dir*=-1;else ccSort={col,dir:1};
+      document.querySelectorAll('#cc-items-table .sort-th').forEach(x=>x.classList.remove('sort-asc','sort-desc'));
+      th.classList.add(ccSort.dir===1?'sort-asc':'sort-desc');
+      renderRows();
+    });
+  });
 
   if(charts['cc-chart-evolucao'])charts['cc-chart-evolucao'].destroy();
   charts['cc-chart-evolucao']=new Chart(document.getElementById('cc-chart-evolucao').getContext('2d'),{
@@ -4956,6 +4980,8 @@ if(session){
   startApp(session);
   initFirebase().then(ok=>{if(ok)fbConnectAuthState();});
 }else{showLoginScreen();}
+
+window._ccTest={setPending:(items,ref)=>{_pendingCcItems=items;_pendingCcRefMonth=ref;},importCcItems,syncCardSummaryTransactions,computeCardMonth,dbGetAll,dbGet,parseInvoiceLines,guessCategoryId,titleCase};
 
 })();
 </script>
