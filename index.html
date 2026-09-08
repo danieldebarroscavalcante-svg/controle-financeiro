@@ -5097,7 +5097,7 @@ if(session){
   initFirebase().then(ok=>{if(ok)fbConnectAuthState();});
 }else{showLoginScreen();}
 
-window._ccTest={readPdfText,parseInvoiceLines,detectReferenceMonth,detectStatedTotal};
+window._ccTest={readPdfText,parseInvoiceLines,detectReferenceMonth,detectStatedTotal,dbGetAll,dbGet,dbPut,processCcPdf,syncCardSummaryTransactions,computeCardMonth};
 
 })();
 </script>
