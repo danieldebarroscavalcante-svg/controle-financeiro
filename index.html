@@ -3445,15 +3445,17 @@ const CC_BRAND_ICON={
   elo:'<svg viewBox="0 0 48 16"><text x="0" y="14" font-family="Arial Black" font-size="15" font-weight="900" fill="currentColor">ELO</text></svg>',
   outro:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>',
 };
+let _selectedCcId=null;
 async function renderCartoes(){
   const cards=await dbGetAll('creditcards');
   const list=document.getElementById('cc-list');
-  if(!cards.length){list.innerHTML='<div class="cc-empty"><div style="font-size:14px;font-weight:600;margin-bottom:6px">Nenhum cartão cadastrado</div><div style="font-size:12.5px">Cadastre seu primeiro cartão clicando em <strong>+ Novo Cartão</strong></div></div>';document.getElementById('cc-invoice-area').innerHTML='';return;}
+  if(!cards.length){list.innerHTML='<div class="cc-empty"><div style="font-size:14px;font-weight:600;margin-bottom:6px">Nenhum cartão cadastrado</div><div style="font-size:12.5px">Cadastre seu primeiro cartão clicando em <strong>+ Novo Cartão</strong></div></div>';document.getElementById('cc-invoice-area').innerHTML='';document.getElementById('cc-dashboard').innerHTML='';return;}
+  if(!_selectedCcId||!cards.some(c=>c.id===_selectedCcId))_selectedCcId='all';
   list.innerHTML='<div class="cc-grid">'+cards.map(c=>{
     const g=c.gradient||CC_GRADIENTS[0];
     const brand=(c.brand||'outro').toLowerCase();
     const brandIcon=CC_BRAND_ICON[brand]||CC_BRAND_ICON.outro;
-    return`<div class="cc-card" style="--card-grad-from:${g.from};--card-grad-to:${g.to}" data-card-id="${c.id}">
+    return`<div class="cc-card ${_selectedCcId===c.id?'selected':''}" style="--card-grad-from:${g.from};--card-grad-to:${g.to}" data-card-id="${c.id}" onclick="FC.selectCc('${c.id}')">
       <div class="cc-actions">
         <button class="btn-icon" onclick="event.stopPropagation();FC.uploadCcInvoice('${c.id}')" title="Importar fatura PDF">${I.upload||I.download}</button>
         <button class="btn-icon" onclick="event.stopPropagation();FC.editCc('${c.id}')" title="Editar">${I.edit}</button>
@@ -3488,6 +3490,145 @@ async function renderCartoes(){
   } else {
     document.getElementById('cc-invoice-area').innerHTML='';
   }
+  await renderCcDashboard(cards);
+}
+
+// ══ DASHBOARD DE CARTÕES ═════════════════════════════════════════════
+async function renderCcDashboard(cards){
+  const el=document.getElementById('cc-dashboard');if(!el)return;
+  const allInvs=await dbGetAll('cc_invoices');
+  const curYm=fmtLocalDate(new Date()).slice(0,7);
+  const scope=_selectedCcId;
+  const scopedCards=scope==='all'?cards:cards.filter(c=>c.id===scope);
+  const invByCard={};for(const c of cards)invByCard[c.id]=allInvs.filter(i=>i.cardId===c.id);
+  const tabsHtml=`<div class="cc-dash-tabs">
+    <button class="cc-dash-tab ${scope==='all'?'active':''}" onclick="FC.selectCc('all')">Visão geral</button>
+    ${cards.map(c=>`<button class="cc-dash-tab ${scope===c.id?'active':''}" onclick="FC.selectCc('${c.id}')">${esc(c.name)}</button>`).join('')}
+  </div>`;
+  const anyInvoice=scopedCards.some(c=>invByCard[c.id].length);
+  if(!anyInvoice){
+    el.innerHTML=tabsHtml+`<div class="empty-state" style="padding:40px 0">Nenhuma fatura importada ${scope==='all'?'ainda':'para este cartão ainda'}. Clique no ícone de upload no card acima para importar a primeira fatura em PDF.</div>`;
+    return;
+  }
+  // Intervalo de meses: do mês atual até o mais distante projetado por alguma parcela.
+  let maxYm=curYm;
+  for(const c of scopedCards)for(const inv of invByCard[c.id]){
+    let span=1;
+    for(const it of(inv.items||[])){
+      if(it.installmentTotal&&it.installmentTotal>1){
+        const remaining=it.installmentTotal-it.installmentNumber+1;
+        if(remaining>span)span=remaining;
+      }
+    }
+    const lastYm=ymAdd(inv.referenceMonth,span-1);
+    if(lastYm>maxYm)maxYm=lastYm;
+  }
+  const monthSpan=Math.min(ymDiff(curYm,maxYm),18);
+  const months=[];for(let i=0;i<=monthSpan;i++)months.push(ymAdd(curYm,i));
+  const monthTotals=months.map(ym=>scopedCards.reduce((s,c)=>s+computeCardMonth(ym,invByCard[c.id]).total,0));
+  const totalAtual=monthTotals[0]||0;
+  const proximaFatura=monthTotals[1]||0;
+  const comprometidoFuturo=monthTotals.slice(1).reduce((s,v)=>s+v,0);
+  const usedNow=monthTotals.reduce((s,v)=>s+v,0);
+  const limiteTotal=scopedCards.reduce((s,c)=>s+(c.totalLimit||0),0);
+  const limiteDisp=Math.max(0,limiteTotal-usedNow);
+  const pctUsado=limiteTotal>0?(usedNow/limiteTotal*100):0;
+
+  const kpiHtml=`<div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="stat-card"><div class="stat-icon-bg"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div><div class="stat-info"><div class="stat-label">Total mês atual</div><div class="stat-value">${fmt(totalAtual)}</div></div></div>
+    <div class="stat-card"><div class="stat-icon-bg yellow"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="stat-info"><div class="stat-label">Próxima fatura</div><div class="stat-value">${fmt(proximaFatura)}</div></div></div>
+    <div class="stat-card"><div class="stat-icon-bg"><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div><div class="stat-info"><div class="stat-label">Comprometido futuro</div><div class="stat-value">${fmt(comprometidoFuturo)}</div></div></div>
+    <div class="stat-card"><div class="stat-icon-bg"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/></svg></div><div class="stat-info"><div class="stat-label">Limite total</div><div class="stat-value">${limiteTotal?fmt(limiteTotal):'—'}</div></div></div>
+    <div class="stat-card"><div class="stat-icon-bg green"><svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="stat-info"><div class="stat-label">Limite disponível</div><div class="stat-value pos">${limiteTotal?fmt(limiteDisp):'—'}</div></div></div>
+    <div class="stat-card"><div class="stat-icon-bg"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></div><div class="stat-info"><div class="stat-label">% limite utilizado</div><div class="stat-value">${limiteTotal?pctUsado.toFixed(0)+'%':'—'}</div></div></div>
+  </div>`;
+
+  let visualHtml='';
+  if(scope!=='all'){
+    const c=scopedCards[0];
+    const g=c.gradient||CC_GRADIENTS[0];
+    visualHtml=`<div class="cc-visual" style="background:linear-gradient(135deg,${g.from},${g.to})">
+      <div class="cv-top"><div><div class="cv-bank">${esc(c.bank||'CARTÃO')}</div><div class="cv-name">${esc(c.name)}</div></div></div>
+      <div class="cv-num">•••• •••• •••• ${c.lastDigits||'••••'}</div>
+      <div class="cv-foot"><div><div class="cv-flabel">Fecha / Vence</div><div class="cv-fval">Dia ${c.closingDay||'—'} / ${c.dueDay||'—'}</div></div><div style="text-align:right"><div class="cv-flabel">Limite</div><div class="cv-fval">${c.totalLimit?fmt(c.totalLimit):'—'}</div></div></div>
+    </div>`;
+  }
+
+  let acc=0;const cumulative=monthTotals.map(v=>acc+=v);
+  const monthLabels=months.map(ym=>{const[y,m]=ym.split('-').map(Number);return`${MONTHS_SHORT[m-1]}/${String(y).slice(2)}`;});
+  const projTable=`<table class="proj-table">
+    <thead><tr><th>Mês</th>${monthLabels.map(l=>`<th>${l}</th>`).join('')}</tr></thead>
+    <tbody>
+      <tr><td>Total</td>${monthTotals.map(v=>`<td>${fmt(v)}</td>`).join('')}</tr>
+      <tr class="row-cumulative"><td>Acumulado</td>${cumulative.map(v=>`<td>${fmt(v)}</td>`).join('')}</tr>
+    </tbody>
+  </table>`;
+
+  const catMap=Object.fromEntries((await dbGetAll('categories')).map(c=>[c.id,c]));
+  const curItems=[];
+  for(const c of scopedCards){const{items}=computeCardMonth(curYm,invByCard[c.id]);curItems.push(...items);}
+  const grouped={};
+  for(const it of curItems){const cat=catMap[it.categoryId];const name=cat?cat.name:'Sem categoria';if(!grouped[name])grouped[name]={val:0,icon:cat?cat.icon:'box'};grouped[name].val+=it.amount;}
+  const catEntries=Object.entries(grouped).sort((a,b)=>b[1].val-a[1].val);
+  const catTotal=catEntries.reduce((s,[,v])=>s+v.val,0);
+  const maxCatVal=catEntries.length?Math.max(...catEntries.map(([,v])=>v.val)):1;
+  const catHtml=catEntries.length?catEntries.map(([name,v])=>`<div class="compare-row">
+      <span class="compare-icon" style="background:var(--primary-l);color:var(--primary)">${catIcon(v.icon)}</span>
+      <div class="compare-info"><div class="compare-name" style="color:var(--primary)">${esc(name)}</div>
+      <div class="compare-bar-wrap"><div class="compare-bar" style="width:${Math.round(v.val/maxCatVal*100)}%;background:var(--primary)"></div></div></div>
+      <div class="compare-right"><div class="compare-value" style="color:var(--primary)">${fmt(v.val)}</div></div>
+    </div>`).join('')+`<div class="compare-total"><span>Total do mês</span><span style="color:var(--red)">${fmt(catTotal)}</span></div>`
+    :'<p class="empty-state">Sem lançamentos neste mês.</p>';
+
+  const allRows=[];
+  for(const c of scopedCards)for(const ym of months){
+    const{items}=computeCardMonth(ym,invByCard[c.id]);
+    for(const it of items)allRows.push({...it,cardName:c.name,ym});
+  }
+
+  el.innerHTML=`${tabsHtml}
+  <div class="cc-dash-head">${visualHtml}<div style="flex:1;min-width:280px">${kpiHtml}</div></div>
+  <div class="grid-2">
+    <div class="panel"><div class="panel-title">Evolução mensal</div><div class="panel-sub">Mês atual + parcelas futuras projetadas</div><div class="chart-wrap tall"><canvas id="cc-chart-evolucao"></canvas></div></div>
+    <div class="panel"><div class="panel-title">Limite: utilizado vs. disponível</div><div class="panel-sub">${limiteTotal?'':'Cadastre o limite do cartão para ver este gráfico'}</div>${limiteTotal?'<div class="chart-wrap tall"><canvas id="cc-chart-limite"></canvas></div>':''}</div>
+  </div>
+  <div class="panel" style="margin-bottom:16px">
+    <div class="panel-title">Projeção mês a mês</div><div class="panel-sub">Total por mês e valor acumulado comprometido</div>
+    <div class="proj-table-wrap">${projTable}</div>
+  </div>
+  <div class="panel" style="margin-bottom:16px">
+    <div class="panel-title">Categoria do mês</div><div class="panel-sub">${MONTHS_SHORT[new Date().getMonth()]}/${new Date().getFullYear()}</div>${catHtml}
+  </div>
+  <div class="panel">
+    <div class="panel-title">Lançamentos do cartão</div><div class="panel-sub">Itens de todas as faturas importadas, mês a mês</div>
+    <div class="filter-bar"><div class="filter-search"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="cc-tbl-search" placeholder="Buscar por descrição..."></div></div>
+    <div style="overflow-x:auto"><table class="data-table" id="cc-items-table">
+      <thead><tr><th>Mês</th>${scope==='all'?'<th>Cartão</th>':''}<th>Descrição</th><th>Categoria</th><th>Parcela</th><th>Valor</th></tr></thead>
+      <tbody id="cc-items-tbody-view"></tbody>
+    </table></div>
+  </div>`;
+
+  const renderRows=filter=>{
+    const q=(filter||'').toLowerCase();
+    const rows=allRows.filter(r=>!q||r.description.toLowerCase().includes(q));
+    document.getElementById('cc-items-tbody-view').innerHTML=rows.length?rows.map(r=>{
+      const cat=catMap[r.categoryId];
+      const[y,m]=r.ym.split('-').map(Number);
+      return`<tr><td>${MONTHS_SHORT[m-1]}/${y}</td>${scope==='all'?`<td>${esc(r.cardName)}</td>`:''}<td>${esc(r.description)}</td><td>${cat?esc(cat.name):'—'}</td><td>${r.installmentTotal?`${r.installmentNumber}/${r.installmentTotal}`:'À vista'}</td><td class="cell-amount neg">${fmt(r.amount)}</td></tr>`;
+    }).join(''):`<tr><td colspan="${scope==='all'?6:5}" class="empty-row">Nenhum lançamento encontrado.</td></tr>`;
+  };
+  renderRows('');
+  document.getElementById('cc-tbl-search').addEventListener('input',e=>renderRows(e.target.value));
+
+  if(charts['cc-chart-evolucao'])charts['cc-chart-evolucao'].destroy();
+  charts['cc-chart-evolucao']=new Chart(document.getElementById('cc-chart-evolucao').getContext('2d'),{
+    data:{labels:monthLabels,datasets:[
+      {type:'bar',label:'Total do mês',data:monthTotals,backgroundColor:'#C6A15E',borderRadius:6},
+      {type:'line',label:'Acumulado comprometido',data:cumulative,borderColor:'#8E8E95',backgroundColor:'transparent',borderWidth:2,tension:.3,pointRadius:3}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#B2B2B7',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.parsed.y)}`}}},scales:{x:{grid:{display:false},ticks:{color:'#83838A',font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.07)'},ticks:{color:'#83838A',font:{size:10},callback:v=>'R$ '+v.toLocaleString('pt-BR')}}}}
+  });
+  if(limiteTotal)drawDonut('cc-chart-limite',usedNow,limiteTotal,'#C6A15E');
 }
 
 async function openCcModal(id){
