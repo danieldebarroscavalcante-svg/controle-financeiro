@@ -4073,7 +4073,11 @@ async function renderCcParseResult(card){
           <td><input type="text" data-i="${i}" data-f="description" value="${esc(it.description)}"></td>
           <td><select data-i="${i}" data-f="categoryId">${catOptsFor(it.categoryId)}</select></td>
           <td><input type="text" inputmode="decimal" data-i="${i}" data-f="amount" value="${maskFromNumber(it.amount)}" style="text-align:right"></td>
-          <td>${it.installmentTotal?`${it.installmentNumber}/${it.installmentTotal}`:'À vista'}</td>
+          <td style="white-space:nowrap;display:flex;align-items:center;gap:3px">
+            <input type="number" min="1" max="360" data-i="${i}" data-f="installmentNumber" value="${it.installmentNumber||''}" placeholder="—" title="Parcela atual" style="width:40px;text-align:center;padding:5px 2px">
+            <span style="color:var(--text3)">/</span>
+            <input type="number" min="1" max="360" data-i="${i}" data-f="installmentTotal" value="${it.installmentTotal||''}" placeholder="à vista" title="Total de parcelas" style="width:52px;text-align:center;padding:5px 2px">
+          </td>
         </tr>`).join('')}
         </tbody>
       </table>
@@ -4086,6 +4090,14 @@ async function renderCcParseResult(card){
       const i=parseInt(inp.dataset.i),f=inp.dataset.f;
       if(f==='enabled')_pendingCcItems[i][f]=inp.checked;
       else if(f==='amount')_pendingCcItems[i][f]=parseCurrency(inp.value);
+      else if(f==='installmentNumber'||f==='installmentTotal'){
+        // Editável à mão: se o PDF não trouxe "2/12" reconhecível na descrição
+        // (ou a compra parcelada não foi detectada por algum outro motivo), o
+        // usuário corrige aqui — senão o item vira "à vista" e nunca projeta
+        // pros meses seguintes.
+        const v=parseInt(inp.value);
+        _pendingCcItems[i][f]=isNaN(v)?null:v;
+      }
       else _pendingCcItems[i][f]=inp.value;
       renderCcSummary(card);
     });
@@ -4129,12 +4141,18 @@ async function importCcItems(card){
   // FINANC -0,66") são legítimos e devem reduzir o total da fatura, não sumir.
   const items=_pendingCcItems.filter(it=>it.enabled&&it.description&&it.amount!==0&&!isNaN(it.amount));
   if(!items.length){alert('Nenhum item selecionado.');return;}
-  const cleanItems=items.map(it=>({
-    id:it.id||uid(),description:it.description,amount:parseFloat(it.amount),
-    installmentNumber:it.installmentTotal?it.installmentNumber:null,
-    installmentTotal:it.installmentTotal||null,
-    categoryId:it.categoryId||null
-  }));
+  const cleanItems=items.map(it=>{
+    // Normaliza o que veio da edição manual: total sem número de parcela vira
+    // "parcela 1"; número maior que o total (entrada inválida) é clampado —
+    // sem isso, a compra nem apareceria no mês atual (ver computeCardMonth).
+    let instTot=it.installmentTotal>1?it.installmentTotal:null;
+    let instNum=instTot?Math.min(Math.max(it.installmentNumber||1,1),instTot):null;
+    return{
+      id:it.id||uid(),description:it.description,amount:parseFloat(it.amount),
+      installmentNumber:instNum,installmentTotal:instTot,
+      categoryId:it.categoryId||null
+    };
+  });
   const total=cleanItems.reduce((s,it)=>s+it.amount,0);
   // Upsert por (cardId, mês de referência): reimportar a mesma fatura ATUALIZA
   // em vez de duplicar — é a mesma lógica de "substituir" pedida pelo usuário.
