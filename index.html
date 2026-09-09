@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="version" content="2026.09.07.7">
+<meta name="version" content="34">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1713,6 +1713,14 @@ async function dbDelete(s,id){const d=await openDB();await new Promise((res,rej)
 function uid(){return crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36);}
 
 // ══ HELPERS ═══════════════════════════════════════════════════════════
+// Versão agora é só um contador (ex: "34" no meta) exibido como "V.034" —
+// muito mais curto que o antigo "2026.09.07.7". Mantém compatibilidade: se o
+// conteúdo do meta não for um número (versão antiga), mostra como estava.
+function appVersionLabel(){
+  const raw=(document.querySelector('meta[name=version]')||{}).content||'';
+  const n=parseInt(raw,10);
+  return(n&&String(n)===raw.trim())?('V.'+String(n).padStart(3,'0')):('v'+raw);
+}
 function fmt(n){return'R$ '+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtDate(d){if(!d)return'';const[y,m,day]=d.split('-');return`${day}/${m}/${y}`;}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -1940,7 +1948,7 @@ async function openSettingsModal(){
     </div>
 
     <div class="settings-section">
-      <h3>💾 Backup e Recuperação <span style="font-weight:600;font-size:11px;color:var(--primary);background:var(--primary-xl);padding:2px 8px;border-radius:10px;vertical-align:middle">v${(document.querySelector('meta[name=version]')||{}).content||'?'}</span></h3>
+      <h3>💾 Backup e Recuperação <span style="font-weight:600;font-size:11px;color:var(--primary);background:var(--primary-xl);padding:2px 8px;border-radius:10px;vertical-align:middle">${appVersionLabel()}</span></h3>
       <p class="section-desc">Salve uma cópia dos dados em arquivo, importe um backup, ou escolha qual aparelho tem a versão correta.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button type="button" class="btn outline" id="btn-backup-export">⬇️ Exportar backup (arquivo)</button>
@@ -2480,7 +2488,7 @@ let widgetHeights={}; // id -> altura mínima em px (vazio = automática)
 
 // ══ INIT ══════════════════════════════════════════════════════════════
 async function init(){
-  try{const _v=document.querySelector('meta[name=version]');const _e=document.getElementById('app-version');if(_v&&_e)_e.textContent='v'+_v.content;}catch(e){}
+  try{const _e=document.getElementById('app-version');if(_e)_e.textContent=appVersionLabel();}catch(e){}
   await openDB();await seed();await seedAccounts();await migrateCatIcons();await dedupeCategories();await dedupeRecurrences();await repairRecurring();await dedupeByMonth();await genRecurring();
   // restore widgets order + sizes
   const so=localStorage.getItem('fc_widgets_order');
@@ -2881,7 +2889,7 @@ async function renderFluxoCaixa(){
     data:{labels:months.map(m=>m.label),datasets:[
       {type:'bar',label:'Receitas',data:incs,backgroundColor:'#C6A15E',borderRadius:6,stack:'s'},
       {type:'bar',label:'Despesas',data:exps,backgroundColor:'#8E8E95',borderRadius:6,stack:'s'},
-      {type:'line',label:'Saldo',data:bals,borderColor:'#C6A15E',backgroundColor:'transparent',borderWidth:2.5,tension:.3,pointBackgroundColor:'#c95007',pointRadius:4}
+      {type:'line',label:'Saldo',data:bals,borderColor:'#FFFFFF',backgroundColor:'transparent',borderWidth:2.5,tension:.3,pointBackgroundColor:'#FFFFFF',pointRadius:4}
     ]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#B2B2B7',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(Math.abs(c.parsed.y))}`}}},scales:{x:{grid:{display:false},ticks:{color:'#83838A',font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.07)'},ticks:{color:'#83838A',font:{size:10},callback:v=>'R$ '+v.toLocaleString('pt-BR')}}}}
   });
@@ -5112,6 +5120,8 @@ if(session){
   startApp(session);
   initFirebase().then(ok=>{if(ok)fbConnectAuthState();});
 }else{showLoginScreen();}
+
+window._ccTest={setPending:(items,ref)=>{_pendingCcItems=items;_pendingCcRefMonth=ref;},importCcItems,syncCardSummaryTransactions,computeCardMonth,dbGetAll,dbGet,dbDelete};
 
 })();
 </script>
