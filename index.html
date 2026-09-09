@@ -2887,9 +2887,9 @@ async function renderFluxoCaixa(){
   const ctx=document.getElementById('fluxo-chart').getContext('2d');
   charts['fluxo-chart']=new Chart(ctx,{
     data:{labels:months.map(m=>m.label),datasets:[
-      {type:'bar',label:'Receitas',data:incs,backgroundColor:'#C6A15E',borderRadius:6,stack:'s'},
-      {type:'bar',label:'Despesas',data:exps,backgroundColor:'#8E8E95',borderRadius:6,stack:'s'},
-      {type:'line',label:'Saldo',data:bals,borderColor:'#FFFFFF',backgroundColor:'transparent',borderWidth:2.5,tension:.3,pointBackgroundColor:'#FFFFFF',pointRadius:4}
+      {type:'bar',label:'Receitas',data:incs,backgroundColor:'#C6A15E',borderRadius:6,stack:'s',order:1},
+      {type:'bar',label:'Despesas',data:exps,backgroundColor:'#8E8E95',borderRadius:6,stack:'s',order:1},
+      {type:'line',label:'Saldo',data:bals,borderColor:'#FFFFFF',backgroundColor:'transparent',borderWidth:2.5,tension:.3,pointBackgroundColor:'#FFFFFF',pointRadius:4,order:0}
     ]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#B2B2B7',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(Math.abs(c.parsed.y))}`}}},scales:{x:{grid:{display:false},ticks:{color:'#83838A',font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.07)'},ticks:{color:'#83838A',font:{size:10},callback:v=>'R$ '+v.toLocaleString('pt-BR')}}}}
   });
@@ -5139,7 +5139,7 @@ if(session){
   initFirebase().then(ok=>{if(ok)fbConnectAuthState();});
 }else{showLoginScreen();}
 
-window._ccTest={setPending:(items,ref)=>{_pendingCcItems=items;_pendingCcRefMonth=ref;},importCcItems,syncCardSummaryTransactions,computeCardMonth,dbGetAll,dbGet,dbDelete,dbPut,uid};
+window._ccTest={setPending:(items,ref)=>{_pendingCcItems=items;_pendingCcRefMonth=ref;},importCcItems,syncCardSummaryTransactions,computeCardMonth,dbGetAll,dbGet,dbDelete,dbPut,uid,renderCcParseResult};
 
 })();
 </script>
