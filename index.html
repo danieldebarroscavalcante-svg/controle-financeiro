@@ -3789,12 +3789,20 @@ function fixAccentSpacing(s){
     s=s.replace(new RegExp(`^([${acc}])\\s`),'$1');
     s=s.replace(new RegExp(`\\s([${acc}])$`),'$1');
   }while(s!==prev);
-  // Mesmo problema com o sinal de "-" de valores negativos: o PDF.js às vezes
-  // extrai o "-" como item à parte, virando "DIF - 52,50" em vez de "DIF
-  // -52,50" — o "-" ficava perdido na descrição e o valor virava positivo.
-  // Cola de volta o "-" no número que vem logo depois.
-  s=s.replace(/-\s+(?=\d)/g,'-');
   return s;
+}
+// Mesmo problema de espaçamento acontece com o "-" de valores negativos: o
+// PDF.js às vezes extrai o sinal de menos e o número como itens separados
+// ("- 52,50" em vez de "-52,50"). MAS isso só pode ser corrigido item por
+// item, ANTES de juntar a linha inteira — um "-" que faz parte do NOME de um
+// estabelecimento (ex: "ALPHAVILLE TRAVESSA -") tem exatamente a mesma cara
+// se colado por engano no valor de OUTRO item logo depois ("- 88,90" vira
+// "-88,90", trocando uma compra normal por uma negativa). Corrigindo cada
+// item isoladamente (só quando ELE MESMO já é "- <valor>" inteiro) evita
+// que o hífen de uma descrição vizinha grude no valor errado.
+function fixNegativeItem(s){
+  const m=s.trim().match(/^-\s+([\d.]+,\d{2})$/);
+  return m?('-'+m[1]):s;
 }
 async function readPdfText(file){
   await loadPDFJS();
@@ -3882,7 +3890,7 @@ async function readPdfText(file){
     for(const stream of streams){
       if(!stream)continue;
       stream.sort((a,b)=>b.y-a.y);
-      const streamLines=stream.map(s=>fixAccentSpacing(s.seg.map(p=>p.s).join(' ').replace(/\s+/g,' ').trim())).filter(Boolean);
+      const streamLines=stream.map(s=>fixAccentSpacing(s.seg.map(p=>fixNegativeItem(p.s)).join(' ').replace(/\s+/g,' ').trim())).filter(Boolean);
       const cutIdx=streamLines.findIndex(ln=>reFutureSection.test(ln));
       lines.push(...(cutIdx>=0?streamLines.slice(0,cutIdx):streamLines));
     }
