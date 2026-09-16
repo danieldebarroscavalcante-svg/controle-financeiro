@@ -3802,13 +3802,27 @@ async function readPdfText(file){
   const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
   let lines=[];
   // Agrupa os itens de uma coluna (já filtrados por X) em linhas por posição Y.
+  // Agrupa itens de texto em linhas por posição vertical (Y). Usa TOLERÂNCIA
+  // em vez de arredondar pra um inteiro exato: confirmado com fatura real que
+  // o valor em R$ de uma compra às vezes renderiza com uma baseline levemente
+  // diferente da data/descrição do mesmo lançamento (ex: y=639.4 vs y=640.1) —
+  // arredondando pra inteiro, um vira 639 e o outro 640, caem em "linhas"
+  // diferentes, e o valor gruda por engano na linha (errada) mais próxima.
+  // Como os itens são varridos em ordem decrescente de Y, só precisa comparar
+  // com a ÚLTIMA linha aberta.
   const buildColumnLines=items=>{
-    const byLine={};
-    items.forEach(it=>{const y=Math.round(it.transform[5]);if(!byLine[y])byLine[y]=[];byLine[y].push({x:it.transform[4],s:it.str});});
-    const sortedYs=Object.keys(byLine).map(Number).sort((a,b)=>b-a);
+    const Y_TOL=3;
+    const sorted=[...items].sort((a,b)=>b.transform[5]-a.transform[5]);
+    const rows=[];
+    for(const it of sorted){
+      const y=it.transform[5];
+      const last=rows[rows.length-1];
+      const row=(last&&Math.abs(last.y-y)<=Y_TOL)?last:(rows.push({y,items:[]}),rows[rows.length-1]);
+      row.items.push({x:it.transform[4],s:it.str});
+    }
     const out=[];
-    for(const y of sortedYs){
-      const ln=fixAccentSpacing(byLine[y].sort((a,b)=>a.x-b.x).map(p=>p.s).join(' ').replace(/\s+/g,' ').trim());
+    for(const row of rows){
+      const ln=fixAccentSpacing(row.items.sort((a,b)=>a.x-b.x).map(p=>p.s).join(' ').replace(/\s+/g,' ').trim());
       if(ln)out.push(ln);
     }
     return out;
