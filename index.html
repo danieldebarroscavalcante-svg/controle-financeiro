@@ -3838,9 +3838,18 @@ async function readPdfText(file){
       const items=row.items.filter(it=>it.s.trim()).sort((a,b)=>a.x-b.x);
       const segments=[[]];
       items.forEach((it,idx)=>{
+        const txt=it.s.trim();
         const next=items[idx+1];
         const isParcela=next&&moneyOnly.test(next.s.trim());
-        if(dateOnly.test(it.s.trim())&&segments[segments.length-1].length>0&&!isParcela)segments.push([]);
+        const isDateStart=dateOnly.test(txt)&&segments[segments.length-1].length>0&&!isParcela;
+        // O rodapé de subtotal por cartão ("Lançamentos no cartão (final 6971)
+        // 6.657,87") às vezes cai na MESMA linha/Y do último lançamento da
+        // coluna vizinha, sem nenhuma data na frente — sem cortar aqui, esse
+        // texto (e o valor do SUBTOTAL) gruda no final da última transação de
+        // verdade, e o parser lê o subtotal inteiro como se fosse o valor
+        // daquela compra (inflando o total da fatura em milhares de reais).
+        const isMarker=/^lan[çc]amentos\b/i.test(txt)&&segments[segments.length-1].length>0;
+        if((isDateStart||isMarker))segments.push([]);
         segments[segments.length-1].push(it);
       });
       segments.forEach((seg,colIdx)=>{
