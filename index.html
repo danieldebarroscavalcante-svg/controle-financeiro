@@ -3972,9 +3972,12 @@ function parseInvoiceLines(lines){
     // separada de "Lançamentos: compras e saques") vem com DATA na frente,
     // tipo "14/08 Pagamento via conta -3.178,15": a linha começa com a data,
     // não com "pagamento", então passava direto e entrava como se fosse uma
-    // compra normal (do lado errado, inflando/deflacionando o total do mês
-    // em milhares de reais). Reaplica o mesmo filtro na DESCRIÇÃO já isolada.
-    if(reSkipKeywords.test(desc.trim()))continue;
+    // compra normal. NÃO reusa o reSkipKeywords inteiro aqui — "IOF PIX",
+    // "JUROS PAGAMENTO CONTAS" e "ENCARGOS PIX" são lançamentos de tarifa
+    // LEGÍTIMOS (têm data própria e contam no total), e começam com
+    // "iof"/"juros"/"encargos" também; só "pagamento" no início da descrição
+    // em si é sinal seguro de que é a quitação de um valor, não uma compra.
+    if(/^pagamento\b/i.test(desc.trim()))continue;
     const amount=parseFloat(valStr.replace(/\./g,'').replace(',','.'));
     if(isNaN(amount)||amount===0)continue;
     // Valores negativos (estorno/crédito, ex: "ESTORNO JUROS DE FINANC -0,66")
