@@ -3871,7 +3871,7 @@ async function readPdfText(file){
       items.forEach((it,idx)=>{
         const txt=it.s.trim();
         const next=items[idx+1];
-        const isParcela=next&&moneyOnly.test(next.s.trim());
+        const isParcela=next&&moneyOnly.test(fixNegativeItem(next.s.trim()));
         const isDateStart=dateOnly.test(txt)&&segments[segments.length-1].length>0&&!isParcela;
         // O rodapé de subtotal por cartão ("Lançamentos no cartão (final 6971)
         // 6.657,87") às vezes cai na MESMA linha/Y do último lançamento da
@@ -3895,7 +3895,12 @@ async function readPdfText(file){
         // sem querer na mesma altura, sem nenhuma data ou marcador conhecido
         // na frente), essa sobra é sempre lixo — corta antes de grudar nela.
         const cur=segments[segments.length-1];
-        const alreadyHasMoney=cur.length>0&&cur.some(x=>moneyOnly.test(x.s.trim()));
+        // Testa com fixNegativeItem: um valor negativo às vezes chega como
+        // "- 52,50" (sinal e número em itens/espaço separados) — sem
+        // normalizar antes, o teste de "já tem valor" nunca reconhecia esse
+        // item como dinheiro, e o que viesse depois (ex: um rótulo de KPI de
+        // OUTRA coluna, "Próxima fatura 3.911,91") grudava sem cortar.
+        const alreadyHasMoney=cur.length>0&&cur.some(x=>moneyOnly.test(fixNegativeItem(x.s.trim())));
         // O cabeçalho "Compras parceladas - próximas faturas" (que corta a
         // leitura logo abaixo) às vezes é o ÚNICO item da coluna vizinha
         // numa linha que também tem "Lançamentos: compras e saques" do outro
