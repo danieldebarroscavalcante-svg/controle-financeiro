@@ -3804,6 +3804,32 @@ function fixNegativeItem(s){
   const m=s.trim().match(/^-\s+([\d.]+,\d{2})$/);
   return m?('-'+m[1]):s;
 }
+// A letra acentuada isolada (item 1) também atrapalha as DECISÕES de corte de
+// coluna, não só o texto final: "Lançamentos no cartão" às vezes chega como
+// vários itens brutos — "Lan","ç","amentos no cart","ã","o (final 1061)" —
+// porque o "ç"/"ã" saiu sozinho. Nosso corte por "começa com Lançamentos"
+// testa cada item ISOLADO, então via de regra nunca reconhecia "Lan" como
+// início de marcador, e esse texto (com o valor do subtotal junto) grudava
+// sem cortar na coluna vizinha. Remonta a palavra ANTES de decidir onde
+// cortar (não só no fim, como o fixAccentSpacing) — mescla cada letra
+// acentuada isolada com o item anterior e o seguinte.
+function repairRowItems(items){
+  const acc='áàâãéêìíîòóôõùúüçñÁÀÂÃÉÊÌÍÎÒÓÔÕÙÚÜÇÑ';
+  const isAccentChar=s=>s.length===1&&acc.includes(s);
+  const out=[];
+  let i=0;
+  while(i<items.length){
+    const txt=items[i].s;
+    if(isAccentChar(txt)&&out.length>0&&i+1<items.length){
+      out[out.length-1]={x:out[out.length-1].x,s:out[out.length-1].s+txt+items[i+1].s};
+      i+=2;
+      continue;
+    }
+    out.push(items[i]);
+    i++;
+  }
+  return out;
+}
 async function readPdfText(file){
   await loadPDFJS();
   const buf=await file.arrayBuffer();
@@ -3840,7 +3866,7 @@ async function readPdfText(file){
     // Cada "fatia" vira um segmento, com sua posição X de início registrada.
     const allSegs=[];
     for(const row of rows){
-      const items=row.items.filter(it=>it.s.trim()).sort((a,b)=>a.x-b.x);
+      const items=repairRowItems(row.items.filter(it=>it.s.trim()).sort((a,b)=>a.x-b.x));
       const segments=[[]];
       items.forEach((it,idx)=>{
         const txt=it.s.trim();
