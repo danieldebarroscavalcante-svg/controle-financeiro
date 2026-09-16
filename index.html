@@ -456,7 +456,6 @@ td.ed select.inline-editor{cursor:pointer}
 .cc-actions .btn-icon{color:rgba(255,255,255,.85);background:rgba(0,0,0,.2)}
 .cc-actions .btn-icon:hover{background:rgba(0,0,0,.4);color:#fff}
 .cc-empty{text-align:center;padding:40px 20px;color:var(--text3);background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow)}
-.cc-invoice-area{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-top:24px}
 .cc-invoice-tbl{width:100%;border-collapse:collapse;margin-top:12px}
 .cc-invoice-tbl thead{background:var(--bg)}
 .cc-invoice-tbl th{padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)}
@@ -1126,7 +1125,6 @@ form{padding:20px 24px}
       <button class="btn primary" id="btn-new-cc">+ Novo Cartão</button>
     </div>
     <div id="cc-list"></div>
-    <div id="cc-invoice-area"></div>
     <div id="cc-dashboard"></div>
   </div>
 
@@ -3465,7 +3463,7 @@ let _selectedCcId=null;
 async function renderCartoes(){
   const cards=await dbGetAll('creditcards');
   const list=document.getElementById('cc-list');
-  if(!cards.length){list.innerHTML='<div class="cc-empty"><div style="font-size:14px;font-weight:600;margin-bottom:6px">Nenhum cartão cadastrado</div><div style="font-size:12.5px">Cadastre seu primeiro cartão clicando em <strong>+ Novo Cartão</strong></div></div>';document.getElementById('cc-invoice-area').innerHTML='';document.getElementById('cc-dashboard').innerHTML='';return;}
+  if(!cards.length){list.innerHTML='<div class="cc-empty"><div style="font-size:14px;font-weight:600;margin-bottom:6px">Nenhum cartão cadastrado</div><div style="font-size:12.5px">Cadastre seu primeiro cartão clicando em <strong>+ Novo Cartão</strong></div></div>';document.getElementById('cc-dashboard').innerHTML='';return;}
   if(!_selectedCcId||!cards.some(c=>c.id===_selectedCcId))_selectedCcId='all';
   list.innerHTML='<div class="cc-grid">'+cards.map(c=>{
     const g=c.gradient||CC_GRADIENTS[0];
@@ -3491,21 +3489,6 @@ async function renderCartoes(){
       </div>
     </div>`;
   }).join('')+'</div>';
-  // Histórico de faturas importadas
-  const invs=await dbGetAll('cc_invoices');
-  const cardMap=Object.fromEntries(cards.map(c=>[c.id,c]));
-  const sortedInvs=invs.sort((a,b)=>(b.importedAt||'').localeCompare(a.importedAt||''));
-  if(sortedInvs.length){
-    document.getElementById('cc-invoice-area').innerHTML=`<div class="cc-invoice-area">
-      <div style="font-size:13px;font-weight:700;margin-bottom:14px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px">Histórico de Faturas Importadas</div>
-      ${sortedInvs.slice(0,10).map(inv=>{const c=cardMap[inv.cardId];return`<div class="cc-history-row">
-        <div class="h-info"><strong>${esc(c?c.name:'Cartão')}</strong> · ${inv.itemCount||0} despesas · ${fmt(inv.total||0)}<small>Referência: ${inv.referenceMonth||'—'} · Importado em ${fmtDate(inv.importedAt?.split('T')[0]||'')}</small></div>
-        <button class="btn-icon danger" onclick="FC.delCcInvoice('${inv.id}')" title="Excluir fatura e despesas">${I.trash}</button>
-      </div>`;}).join('')}
-    </div>`;
-  } else {
-    document.getElementById('cc-invoice-area').innerHTML='';
-  }
   await renderCcDashboard(cards);
 }
 
@@ -3522,9 +3505,23 @@ async function renderCcDashboard(cards){
     <button class="cc-dash-tab ${scope==='all'?'active':''}" onclick="FC.selectCc('all')">Visão geral</button>
     ${cards.map(c=>`<button class="cc-dash-tab ${scope===c.id?'active':''}" onclick="FC.selectCc('${c.id}')">${esc(c.name)}</button>`).join('')}
   </div>`;
+  // Histórico de faturas importadas — sempre TODAS as faturas de TODOS os
+  // cartões (independente da aba/cartão selecionado), por isso usa `cards`/
+  // `allInvs` direto, não `scopedCards`/`invByCard`.
+  const cardMapAll=Object.fromEntries(cards.map(c=>[c.id,c]));
+  const sortedInvs=[...allInvs].sort((a,b)=>(b.importedAt||'').localeCompare(a.importedAt||''));
+  const historyHtml=sortedInvs.length?`<div class="panel" style="margin:16px 0 0">
+    <div class="panel-title">Histórico de Faturas Importadas</div>
+    <div style="max-height:340px;overflow-y:auto">
+      ${sortedInvs.slice(0,10).map(inv=>{const c=cardMapAll[inv.cardId];return`<div class="cc-history-row">
+        <div class="h-info"><strong>${esc(c?c.name:'Cartão')}</strong> · ${inv.itemCount||0} despesas · ${fmt(inv.total||0)}<small>Referência: ${inv.referenceMonth||'—'} · Importado em ${fmtDate(inv.importedAt?.split('T')[0]||'')}</small></div>
+        <button class="btn-icon danger" onclick="FC.delCcInvoice('${inv.id}')" title="Excluir fatura e despesas">${I.trash}</button>
+      </div>`;}).join('')}
+    </div>
+  </div>`:'';
   const anyInvoice=scopedCards.some(c=>invByCard[c.id].length);
   if(!anyInvoice){
-    el.innerHTML=tabsHtml+`<div class="empty-state" style="padding:40px 0">Nenhuma fatura importada ${scope==='all'?'ainda':'para este cartão ainda'}. Clique no ícone de upload no card acima para importar a primeira fatura em PDF.</div>`;
+    el.innerHTML=tabsHtml+`<div class="empty-state" style="padding:40px 0">Nenhuma fatura importada ${scope==='all'?'ainda':'para este cartão ainda'}. Clique no ícone de upload no card acima para importar a primeira fatura em PDF.</div>`+historyHtml;
     return;
   }
 
@@ -3639,6 +3636,7 @@ async function renderCcDashboard(cards){
       </table></div>
     </div>
   </div>
+  ${historyHtml}
   <div class="panel" style="margin:16px 0 0">
     <div class="panel-title">Visão de futuro</div><div class="panel-sub">A partir de hoje (${MONTHS_SHORT[new Date().getMonth()]}/${new Date().getFullYear()}) — independente do mês navegado acima</div>
   </div>
