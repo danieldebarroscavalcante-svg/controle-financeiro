@@ -3805,13 +3805,13 @@ async function readPdfText(file){
   // no PDF — nunca vem grudada em mais nada. Usa isso pra achar onde começa
   // cada lançamento dentro de uma linha. MAS uma parcela tipo "05/10" (5ª de
   // 10 parcelas) tem o MESMO formato DD/MM e aparece colada no meio da
-  // descrição — pra não confundir as duas, só considera "início de nova
-  // coluna" uma data que cai na mesma posição X onde colunas de verdade
-  // começam (1º item de outras linhas da página inteira já é sempre uma data).
+  // descrição, logo antes do valor — pra não confundir as duas: uma data que
+  // inicia lançamento de verdade sempre é seguida por TEXTO (a descrição);
+  // uma parcela "X/Y" sempre é seguida direto pelo VALOR em R$. Só corta a
+  // linha em nova coluna quando o próximo item não é um valor monetário.
   const dateOnly=/^\d{1,2}\/\d{1,2}$/;
+  const moneyOnly=/^-?\d{1,3}(\.\d{3})*,\d{2}$/;
   const Y_TOL=1;
-  const pagesRows=[];
-  const colStartXs=[];
   for(let i=1;i<=pdf.numPages;i++){
     const page=await pdf.getPage(i);
     const content=await page.getTextContent();
@@ -3826,37 +3826,21 @@ async function readPdfText(file){
       const row=(last&&Math.abs(last.y-y)<=Y_TOL)?last:(rows.push({y,items:[]}),rows[rows.length-1]);
       row.items.push({x:it.transform[4],s:it.str});
     }
-    for(const row of rows){
-      row.items=row.items.filter(it=>it.s.trim()).sort((a,b)=>a.x-b.x);
-      if(row.items.length&&dateOnly.test(row.items[0].s.trim()))colStartXs.push(row.items[0].x);
-    }
-    pagesRows.push(rows);
-  }
-  // Clusteriza as posições X onde uma coluna realmente começa (1º item da
-  // linha, sempre data) — vira a lista de X válidos pra cortar.
-  colStartXs.sort((a,b)=>a-b);
-  const clusters=[];
-  for(const x of colStartXs){
-    const last=clusters[clusters.length-1];
-    if(last&&x-last.sum/last.n<=6){last.sum+=x;last.n++;}
-    else clusters.push({sum:x,n:1});
-  }
-  const validX=clusters.map(c=>c.sum/c.n);
-  const isColStart=x=>validX.some(v=>Math.abs(x-v)<=6);
-  // Muitas faturas (Itaú confirmado) imprimem 2+ colunas lado a lado por
-  // página — cada uma com sua própria lista de lançamentos independente (às
-  // vezes uma delas é literalmente "compras parceladas — próximas faturas").
-  // Cada "fatia" vira uma sub-linha, acumulada na sua própria sequência
-  // (coluna 0, coluna 1...) lida por inteiro de cima a baixo, preservando a
-  // ordem/adjacência dentro dela (sem isso a fatia da direita colaria na da
-  // esquerda na mesma altura, misturando fatura atual com projeção futura).
-  for(const rows of pagesRows){
+    // Muitas faturas (Itaú confirmado) imprimem 2+ colunas lado a lado por
+    // página — cada uma com sua própria lista de lançamentos independente (às
+    // vezes uma delas é literalmente "compras parceladas — próximas faturas").
+    // Cada "fatia" vira uma sub-linha, acumulada na sua própria sequência
+    // (coluna 0, coluna 1...) lida por inteiro de cima a baixo, preservando a
+    // ordem/adjacência dentro dela (sem isso a fatia da direita colaria na da
+    // esquerda na mesma altura, misturando fatura atual com projeção futura).
     const streams=[];
     for(const row of rows){
-      const items=row.items;
+      const items=row.items.filter(it=>it.s.trim()).sort((a,b)=>a.x-b.x);
       const segments=[[]];
-      items.forEach(it=>{
-        if(dateOnly.test(it.s.trim())&&segments[segments.length-1].length>0&&isColStart(it.x))segments.push([]);
+      items.forEach((it,idx)=>{
+        const next=items[idx+1];
+        const isParcela=next&&moneyOnly.test(next.s.trim());
+        if(dateOnly.test(it.s.trim())&&segments[segments.length-1].length>0&&!isParcela)segments.push([]);
         segments[segments.length-1].push(it);
       });
       segments.forEach((seg,colIdx)=>{
