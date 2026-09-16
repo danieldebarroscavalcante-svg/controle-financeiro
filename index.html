@@ -3854,7 +3854,15 @@ async function readPdfText(file){
         // verdade, e o parser lê o subtotal inteiro como se fosse o valor
         // daquela compra (inflando o total da fatura em milhares de reais).
         const isMarker=/^lan[çc]amentos\b/i.test(txt)&&segments[segments.length-1].length>0;
-        if((isDateStart||isMarker))segments.push([]);
+        // O cabeçalho de coluna ("DATA ESTABELECIMENTO VALOR EM R$") se repete
+        // no topo de cada página/seção nova — e "DATA" sempre vem como item
+        // isolado. Quando esse cabeçalho cai na mesma linha/Y do último
+        // lançamento da coluna vizinha (início de nova página bem colado),
+        // ele gruda no final dessa transação sem nenhuma data na frente pra
+        // disparar o corte — e como termina em "R$" (não em valor), o parser
+        // descarta a transação inteira por engano.
+        const isHeader=/^data$/i.test(txt)&&segments[segments.length-1].length>0;
+        if((isDateStart||isMarker||isHeader))segments.push([]);
         segments[segments.length-1].push(it);
       });
       segments.forEach(seg=>{if(seg.length)allSegs.push({y:row.y,x0:seg[0].x,seg});});
