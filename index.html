@@ -3961,6 +3961,20 @@ function parseInvoiceLines(lines){
     else continue;
     if(!month||month<1||month>12)continue;
     if(!day||day<1||day>31)continue;
+    // Texto de resumo/boleto na página 1 (ex: "Vencimento: 17/09/2026" bem
+    // perto de "Limite total de crédito R$ 6.782,00" no mesmo Y) às vezes cai
+    // como se fosse "17/09/2026 R$ 6.782,00" — bate no regex de transação,
+    // mas a "descrição" sobra vazia ou só o cifrão, nunca um estabelecimento
+    // de verdade. Uma compra real sempre tem nome — descarta esse lixo aqui.
+    if(!desc.trim()||/^r\$$/i.test(desc.trim()))continue;
+    // reSkipKeywords acima só pega quando a PRÓPRIA LINHA começa com a
+    // palavra — mas um pagamento de fatura (seção "Pagamentos efetuados",
+    // separada de "Lançamentos: compras e saques") vem com DATA na frente,
+    // tipo "14/08 Pagamento via conta -3.178,15": a linha começa com a data,
+    // não com "pagamento", então passava direto e entrava como se fosse uma
+    // compra normal (do lado errado, inflando/deflacionando o total do mês
+    // em milhares de reais). Reaplica o mesmo filtro na DESCRIÇÃO já isolada.
+    if(reSkipKeywords.test(desc.trim()))continue;
     const amount=parseFloat(valStr.replace(/\./g,'').replace(',','.'));
     if(isNaN(amount)||amount===0)continue;
     // Valores negativos (estorno/crédito, ex: "ESTORNO JUROS DE FINANC -0,66")
