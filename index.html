@@ -3862,7 +3862,15 @@ async function readPdfText(file){
         // disparar o corte — e como termina em "R$" (não em valor), o parser
         // descarta a transação inteira por engano.
         const isHeader=/^data$/i.test(txt)&&segments[segments.length-1].length>0;
-        if((isDateStart||isMarker||isHeader))segments.push([]);
+        // Uma transação de verdade sempre TERMINA no valor — nada de
+        // relevante vem depois dele na mesma linha. Se o segmento atual já
+        // tem um valor em R$ e ainda assim aparece mais alguma coisa (ex: o
+        // nome da cidade de uma categoria/subtítulo da coluna vizinha caindo
+        // sem querer na mesma altura, sem nenhuma data ou marcador conhecido
+        // na frente), essa sobra é sempre lixo — corta antes de grudar nela.
+        const cur=segments[segments.length-1];
+        const alreadyHasMoney=cur.length>0&&cur.some(x=>moneyOnly.test(x.s.trim()));
+        if((isDateStart||isMarker||isHeader||alreadyHasMoney))segments.push([]);
         segments[segments.length-1].push(it);
       });
       segments.forEach(seg=>{if(seg.length)allSegs.push({y:row.y,x0:seg[0].x,seg});});
@@ -5186,8 +5194,6 @@ if(session){
   startApp(session);
   initFirebase().then(ok=>{if(ok)fbConnectAuthState();});
 }else{showLoginScreen();}
-
-window._ccTest={readPdfText,parseInvoiceLines,detectStatedTotal,detectReferenceMonth};
 
 })();
 </script>
