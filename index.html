@@ -3870,7 +3870,15 @@ async function readPdfText(file){
         // na frente), essa sobra é sempre lixo — corta antes de grudar nela.
         const cur=segments[segments.length-1];
         const alreadyHasMoney=cur.length>0&&cur.some(x=>moneyOnly.test(x.s.trim()));
-        if((isDateStart||isMarker||isHeader||alreadyHasMoney))segments.push([]);
+        // O cabeçalho "Compras parceladas - próximas faturas" (que corta a
+        // leitura logo abaixo) às vezes é o ÚNICO item da coluna vizinha
+        // numa linha que também tem "Lançamentos: compras e saques" do outro
+        // lado — sem nenhum outro item entre eles pra disparar corte, os
+        // dois grudavam numa linha só; e como essa frase then aparecia
+        // DENTRO da stream da coluna de verdade, o corte de seção futura
+        // (por coluna) descartava a fatura inteira daquele lado por engano.
+        const isFutureHeader=reFutureSection.test(txt)&&segments[segments.length-1].length>0;
+        if((isDateStart||isMarker||isHeader||alreadyHasMoney||isFutureHeader))segments.push([]);
         segments[segments.length-1].push(it);
       });
       segments.forEach(seg=>{if(seg.length)allSegs.push({y:row.y,x0:seg[0].x,seg});});
