@@ -3811,7 +3811,7 @@ async function readPdfText(file){
   // Como os itens são varridos em ordem decrescente de Y, só precisa comparar
   // com a ÚLTIMA linha aberta.
   const buildColumnLines=items=>{
-    const Y_TOL=3;
+    const Y_TOL=1;
     const sorted=[...items].sort((a,b)=>b.transform[5]-a.transform[5]);
     const rows=[];
     for(const it of sorted){
