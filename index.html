@@ -3858,7 +3858,16 @@ async function readPdfText(file){
         if(ln)streams[colIdx].push(ln);
       });
     }
-    for(const stream of streams)lines.push(...stream);
+    // "Compras parceladas - próximas faturas" corta a leitura — mas só DENTRO
+    // da própria coluna/stream onde aparece: numa página de duas colunas, uma
+    // pode ser a prévia de meses futuros enquanto a outra, do lado, ainda é
+    // fatura atual (ex: internacionais de um lado, produtos e serviços do
+    // outro). Cortar a página/documento inteiro ali jogava fora seções de
+    // verdade da fatura atual que só vinham DEPOIS na leitura por coluna.
+    for(const stream of streams){
+      const cutIdx=stream.findIndex(ln=>reFutureSection.test(ln));
+      lines.push(...(cutIdx>=0?stream.slice(0,cutIdx):stream));
+    }
   }
   return lines;
 }
